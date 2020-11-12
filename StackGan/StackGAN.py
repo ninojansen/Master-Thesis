@@ -1,5 +1,5 @@
 from random import sample
-from utils import DataLoader, make_gif
+from .utils import DataLoader, make_gif
 import os
 import random
 import shutil
@@ -18,6 +18,12 @@ from tensorflow.keras.optimizers import Adam
 import yaml
 from tqdm import tqdm
 import copy
+
+# Data source: https://drive.google.com/file/d/1hbzc_P1FuxMkcabkgn9ZKinBwW683j45/view
+# Embeddings source: https://drive.google.com/file/d/0B3y_msrWZaXLT1BZdVdycDY5TEE
+
+# TODO https://www.tensorflow.org/datasets/overview use this to load dataset CALTEB Birds 2011
+# TODO Make embeddings myself using an  LSTM/ https://www.analyticsvidhya.com/blog/2020/08/top-4-sentence-embedding-techniques-using-python/
 
 
 class StackGAN():
@@ -342,10 +348,10 @@ class StackGAN():
                 f'Epoch {epoch} took {time.time()-start} sec, avg d_loss={epoch_d_loss[epoch]} g_loss={epoch_g_loss[epoch]}')
             pbar.close()
 
-            if (epoch + 1) % 1 == 0:
+            if (epoch + 1) % 5 == 0:
                 random.shuffle(example_images)
                 self.save_images(example_images, epoch)
-                self.generate_examples(5, 5, epoch)
+                #self.generate_examples(5, 5, epoch)
 
             if (epoch + 1) % self.lr_decay_epoch == 0:
                 print(f"{self.lr_decay_epoch}th epoch; Halving the learning rate")
@@ -362,6 +368,7 @@ class StackGAN():
                 np.savetxt(os.path.join(self.output_loss, f"d_loss_{epoch+1}.txt"), np.array(epoch_d_loss))
 
         # make_gif(self.output_test_images)
+        self.generate_examples(5, 5, epoch)
         self.generator1.save(os.path.join(self.output_models, "stage1_gen"))
         self.discriminator1.save(os.path.join(self.output_models, "stage1_disc"))
         np.savetxt(os.path.join(self.output_loss, f"g_loss_final.txt"), np.array(epoch_g_loss))
