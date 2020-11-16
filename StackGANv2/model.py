@@ -11,19 +11,30 @@ from tensorflow.keras.optimizers import Adam
 import matplotlib.pyplot as plt
 
 
-class Generators:
-    def __init__(self, cfg):
-        self.cfg = cfg
-        self.Ng = cfg.GAN.GF_DIM
-        self.c_dim = cfg.GAN.EMBEDDING_DIM
-        self.z_dim = cfg.GAN.Z_DIM
+class GLU(tf.keras.layers.Layer):
+    def __init__(self,):
+        super(GLU, self).__init__()
 
-    def GLU(self, x):
-        # Gated Linear Unit activation; see https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.glu
-        # Halfway split to form a and b
-        n_channels = int(x.get_shape().as_list()[-1]/2)
-        # a * sigmoid(b)
-        return x[..., :n_channels] * K.sigmoid(x[..., n_channels:])
+    def build(self, input_shape):
+        self.n_channels = input_shape[-1] // 2
+
+    def call(self, input):
+        return input[..., :self.n_channels] * K.sigmoid(input[..., self.n_channels:])
+
+
+class Generators:
+    def __init__(self, branch_num=1, Ng=16, c_dim=10, z_dim=100):
+        self.branch_num = branch_num
+        self.Ng = Ng
+        self.c_dim = c_dim
+        self.z_dim = z_dim
+
+    # def GLU(self, x):
+    #     # Gated Linear Unit activation; see https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.glu
+    #     # Halfway split to form a and b
+    #     n_channels = int(x.get_shape().as_list()[-1]/2)
+    #     # a * sigmoid(b)
+    #     return x[..., :n_channels] * K.sigmoid(x[..., n_channels:])
 
     def upsampling_block(self, x, n_filters):
         x = UpSampling2D(size=(2, 2), interpolation="nearest")(x)
@@ -33,7 +44,7 @@ class Generators:
     def conv3x3_block(self, x, n_filters):
         x = Conv2D(n_filters, (3, 3), strides=1, padding='same', use_bias=False)(x)
         x = BatchNormalization()(x)
-        x = Activation(self.GLU)(x)
+        x = GLU()(x)
         return x
 
     def to_image_block(self, x):
@@ -55,7 +66,7 @@ class Generators:
     def residual_block(self, x, n_filters):
         Fx = Conv2D(n_filters*2, kernel_size=(3, 3), strides=1, padding="same", use_bias=False)(x)
         Fx = BatchNormalization()(Fx)
-        Fx = Activation(self.GLU)(Fx)
+        Fx = GLU()(x)
 
         Fx = Conv2D(n_filters, kernel_size=(3, 3), strides=1, padding="same", use_bias=False)(Fx)
         Fx = BatchNormalization()(Fx)
@@ -68,7 +79,7 @@ class Generators:
 
         x = Dense(4*4*64*self.Ng * 2, use_bias=False)(input_concat)
         x = BatchNormalization()(x)
-        x = Activation(self.GLU)(x)
+        x = GLU()(x)
 
         x = Reshape((4, 4, 64*self.Ng))(x)
 
@@ -107,13 +118,13 @@ class Generators:
         input_z = Input(shape=(self.z_dim,))
 
         outputs = []
-        if self.cfg.TREE.BRANCH_NUM > 0:
+        if self.branch_num > 0:
             hidden_0, out_im_64 = self.G_NET64(input_c, input_z)
             outputs.append(out_im_64)
-        if self.cfg.TREE.BRANCH_NUM > 1:
+        if self.branch_num > 1:
             hidden_1, out_im_128 = self.G_NET128(input_c, hidden_0)
             outputs.append(out_im_128)
-        if self.cfg.TREE.BRANCH_NUM > 2:
+        if self.branch_num > 2:
             hidden_2, out_im_256 = self.G_NET256(input_c, hidden_1)
             outputs.append(out_im_256)
 

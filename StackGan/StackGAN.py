@@ -1,5 +1,5 @@
 from random import sample
-from .utils import DataLoader, make_gif
+from utils import DataLoader, make_gif
 import os
 import random
 import shutil
