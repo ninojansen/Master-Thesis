@@ -1,0 +1,25 @@
+CONFIG_NAME: "bird"
+
+DATASET_NAME: "birds"
+DATA_DIR: "/home/nino/Documents/Datasets/Birds"
+GPU_ID: 0
+WORKERS: 1
+
+B_VALIDATION: False # True  # False
+loss: "hinge"
+
+TREE:
+  BRANCH_NUM: 1
+  BASE_SIZE: 256
+
+TRAIN:
+  NF: 8 # default 64
+  BATCH_SIZE: 12 # default 24
+  MAX_EPOCH: 601
+  NET_G: "../test"
+
+TEXT:
+  EMBEDDING_DIM: 768 #256 default
+  CAPTIONS_PER_IMAGE: 10
+  ENCODER: "sbert"
+  DAMSM_NAME: "/home/nino/Documents/Datasets/Birds/encoders/text_encoder200.pth"

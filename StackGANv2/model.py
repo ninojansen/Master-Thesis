@@ -23,18 +23,29 @@ class GLU(tf.keras.layers.Layer):
 
 
 class Generators:
-    def __init__(self, branch_num=1, Ng=16, c_dim=10, z_dim=100):
+    def __init__(self, branch_num=1, Ng=16, c_dim=128, z_dim=100, embed_dim=1024):
         self.branch_num = branch_num
         self.Ng = Ng
         self.c_dim = c_dim
         self.z_dim = z_dim
+        self.embed_dim = embed_dim
 
-    # def GLU(self, x):
-    #     # Gated Linear Unit activation; see https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.glu
-    #     # Halfway split to form a and b
-    #     n_channels = int(x.get_shape().as_list()[-1]/2)
-    #     # a * sigmoid(b)
-    #     return x[..., :n_channels] * K.sigmoid(x[..., n_channels:])
+    def ca_sampling(self, args):
+        # Reparameterization trick following https://towardsdatascience.com/reparameterization-trick-126062cfd3c3
+        mu, log_var = args
+        epsilon = tf.random.normal(
+            shape=(self.c_dim,), mean=0.)
+        return mu + tf.math.exp(log_var / 2) * epsilon
+
+    def ca_block(self, x):
+        conditions = Dense(self.c_dim*4)(x)
+        conditions = GLU()(conditions)
+
+        mu = conditions[:, :self.c_dim]
+        log_var = conditions[:, self.c_dim:]
+        c = Lambda(self.ca_sampling)((mu, log_var))
+
+        return c, mu, log_var
 
     def upsampling_block(self, x, n_filters):
         x = UpSampling2D(size=(2, 2), interpolation="nearest")(x)
@@ -113,22 +124,33 @@ class Generators:
         out_img_256 = self.to_image_block(out_hidden)
         return out_hidden, out_img_256
 
-    def model(self,):
-        input_c = Input(shape=(self.c_dim,))
+    def model(self, use_ca=False):
+        outputs = []
+        if use_ca:
+            input_embed = Input(shape=(self.embed_dim,))
+            c, mu, logvar = self.ca_block(input_embed)
+            outputs.append(c)
+            outputs.append(mu)
+            outputs.append(logvar)
+        else:
+            c = Input(shape=(self.c_dim,))
+
         input_z = Input(shape=(self.z_dim,))
 
-        outputs = []
         if self.branch_num > 0:
-            hidden_0, out_im_64 = self.G_NET64(input_c, input_z)
+            hidden_0, out_im_64 = self.G_NET64(c, input_z)
             outputs.append(out_im_64)
         if self.branch_num > 1:
-            hidden_1, out_im_128 = self.G_NET128(input_c, hidden_0)
+            hidden_1, out_im_128 = self.G_NET128(c, hidden_0)
             outputs.append(out_im_128)
         if self.branch_num > 2:
-            hidden_2, out_im_256 = self.G_NET256(input_c, hidden_1)
+            hidden_2, out_im_256 = self.G_NET256(c, hidden_1)
             outputs.append(out_im_256)
 
-        return Model(inputs=[input_c, input_z], outputs=outputs)
+        if use_ca:
+            return Model(inputs=[input_embed, input_z], outputs=[outputs])
+        else:
+            return Model(inputs=[c, input_z], outputs=[outputs])
 
 
 class Discriminators:
