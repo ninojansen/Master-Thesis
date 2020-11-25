@@ -6,10 +6,10 @@ from collections import OrderedDict
 
 
 class NetG(nn.Module):
-    def __init__(self, ngf=64, nz=100, n_emb=256):
+    def __init__(self, ngf=64, nz=100, n_emb=256, img_size=256):
         super(NetG, self).__init__()
         self.ngf = ngf
-
+        self.img_size = img_size
         # layer1输入的是一个100x1x1的随机噪声, 输出尺寸(ngf*8)x4x4
         self.fc = nn.Linear(nz, ngf*8*4*4)
         self.block0 = UpBlock(ngf * 8, ngf * 8, n_emb)  # 4x4
@@ -31,15 +31,15 @@ class NetG(nn.Module):
         out = self.fc(x)
         out = out.view(x.size(0), 8*self.ngf, 4, 4)
         out = self.block0(out, c)
-
-        out = F.interpolate(out, scale_factor=2)
-        out = self.block1(out, c)
-
-        out = F.interpolate(out, scale_factor=2)
-        out = self.block2(out, c)
-
-        out = F.interpolate(out, scale_factor=2)
-        out = self.block3(out, c)
+        if self.img_size >= 256:
+            out = F.interpolate(out, scale_factor=2)
+            out = self.block1(out, c)
+        if self.img_size >= 128:
+            out = F.interpolate(out, scale_factor=2)
+            out = self.block2(out, c)
+        if self.img_size >= 64:
+            out = F.interpolate(out, scale_factor=2)
+            out = self.block3(out, c)
 
         out = F.interpolate(out, scale_factor=2)
         out = self.block4(out, c)
@@ -154,9 +154,9 @@ class D_GET_LOGITS(nn.Module):
 
 
 class NetD(nn.Module):
-    def __init__(self, ndf, n_emb=256):
+    def __init__(self, ndf, n_emb=256, img_size=256):
         super(NetD, self).__init__()
-
+        self.img_size = img_size
         self.conv_img = nn.Conv2d(3, ndf, 3, 1, 1)  # 128
         self.block0 = DownBlock(ndf * 1, ndf * 2)  # 64
         self.block1 = DownBlock(ndf * 2, ndf * 4)  # 32
@@ -173,9 +173,12 @@ class NetD(nn.Module):
         out = self.block0(out)
         out = self.block1(out)
         out = self.block2(out)
-        out = self.block3(out)
-        out = self.block4(out)
-        out = self.block5(out)
+        if self.img_size >= 64:
+            out = self.block3(out)
+        if self.img_size >= 128:
+            out = self.block4(out)
+        if self.img_size >= 256:
+            out = self.block5(out)
 
         return out
 

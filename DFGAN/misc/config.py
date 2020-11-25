@@ -15,7 +15,6 @@ __C.CONFIG_NAME = ''
 __C.DATA_DIR = ''
 __C.GPU_ID = 0
 __C.CUDA = True
-__C.WORKERS = 6
 
 __C.RNN_TYPE = 'LSTM'   # 'GRU'
 __C.B_VALIDATION = False

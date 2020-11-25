@@ -1,9 +1,3 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
-
 from nltk.tokenize import RegexpTokenizer
 from collections import defaultdict
 from misc.config import cfg
@@ -20,6 +14,10 @@ import pandas as pd
 from PIL import Image
 import numpy.random as random
 import pickle
+from tqdm import tqdm
+if "sentence_transformers" in sys.modules:
+    from sentence_transformers import SentenceTransformer
+from DAMSM import RNN_ENCODER
 
 
 def prepare_data(data):
@@ -87,7 +85,8 @@ def get_imgs(img_path, imsize, bbox=None,
 class TextDataset(data.Dataset):
     def __init__(self, data_dir, split='train',
                  base_size=64,
-                 transform=None, target_transform=None):
+                 transform=None, target_transform=None, encoder_type="RNN"):
+        self.encoder_type = encoder_type
         self.transform = transform
         self.norm = transforms.Compose([
             transforms.ToTensor(),
@@ -108,20 +107,19 @@ class TextDataset(data.Dataset):
             self.bbox = None
         split_dir = os.path.join(data_dir, split)
 
-        self.filenames, self.captions, self.ixtoword, \
-            self.wordtoix, self.n_words = self.load_text_data(data_dir, split)
+        self.filenames, self.captions, self.raw_strings = self.load_text_data(data_dir, split)
 
         self.class_id = self.load_class_id(split_dir, len(self.filenames))
         self.number_example = len(self.filenames)
 
     def load_bbox(self):
         data_dir = self.data_dir
-        bbox_path = os.path.join(data_dir, 'CUB_200_2011/bounding_boxes.txt')
+        bbox_path = os.path.join(data_dir, 'bounding_boxes.txt')
         df_bounding_boxes = pd.read_csv(bbox_path,
                                         delim_whitespace=True,
                                         header=None).astype(int)
         #
-        filepath = os.path.join(data_dir, 'CUB_200_2011/images.txt')
+        filepath = os.path.join(data_dir, 'images.txt')
         df_filenames = \
             pd.read_csv(filepath, delim_whitespace=True, header=None)
         filenames = df_filenames[1].tolist()
@@ -213,36 +211,54 @@ class TextDataset(data.Dataset):
                 ixtoword, wordtoix, len(ixtoword)]
 
     def load_text_data(self, data_dir, split):
-        filepath = os.path.join(data_dir, 'captions.pickle')
+        pretrained_filepath = os.path.join(data_dir, f'captions_{self.encoder_type}.pickle')
+
         train_names = self.load_filenames(data_dir, 'train')
         test_names = self.load_filenames(data_dir, 'test')
-        if not os.path.isfile(filepath):
-            train_captions = self.load_captions(data_dir, train_names)
-            test_captions = self.load_captions(data_dir, test_names)
 
-            train_captions, test_captions, ixtoword, wordtoix, n_words = \
-                self.build_dictionary(train_captions, test_captions)
-            with open(filepath, 'wb') as f:
-                pickle.dump([train_captions, test_captions,
-                             ixtoword, wordtoix], f, protocol=2)
-                print('Save to: ', filepath)
-        else:
-            with open(filepath, 'rb') as f:
-                x = pickle.load(f)
-                train_captions, test_captions = x[0], x[1]
-                ixtoword, wordtoix = x[2], x[3]
-                del x
-                n_words = len(ixtoword)
-                print('Load from: ', filepath)
+        # No pretrained embeddings
+        if not os.path.isfile(pretrained_filepath):
+            print(f"Found no pretrained embbedings in {pretrained_filepath}.")
+            captions_filepath = os.path.join(data_dir, 'captions.pickle')
+            if not os.path.isfile(captions_filepath):
+                print(f"Found no captions file in {captions_filepath}")
+                print("Generating new captions file...")
+                # Generate captions embeddings pickle
+                train_captions = self.load_captions(data_dir, train_names)
+                test_captions = self.load_captions(data_dir, test_names)
+
+                train_captions, test_captions, ixtoword, wordtoix, n_words = \
+                    self.build_dictionary(train_captions, test_captions)
+                with open(captions_filepath, 'wb') as f:
+                    pickle.dump([train_captions, test_captions,
+                                 ixtoword, wordtoix], f, protocol=2)
+                    print('Save to: ', captions_filepath)
+
+            # Pretrain embeddings
+            self.pretrain_embeddings()
+
+        # Load the pretrained embeddings
+        with open(pretrained_filepath, 'rb') as f:
+            x = pickle.load(f)
+            train_captions, test_captions = x[0], x[1]
+            train_strings, test_strings = x[2], x[3]
+            del x
+            print(f'Load embeddings from: {pretrained_filepath}')
+
+        # Set the embedding dimension to the loaded file
+        cfg.TEXT.EMBEDDING_DIM = len(train_captions[0])
         if split == 'train':
             # a list of list: each list contains
             # the indices of words in a sentence
             captions = train_captions
             filenames = train_names
+            raw_strings = train_strings
         else:  # split=='test'
             captions = test_captions
             filenames = test_names
-        return filenames, captions, ixtoword, wordtoix, n_words
+            raw_strings = test_strings
+
+        return filenames, captions, raw_strings
 
     def load_class_id(self, data_dir, total_num):
         if os.path.isfile(data_dir + '/class_info.pickle'):
@@ -262,9 +278,64 @@ class TextDataset(data.Dataset):
             filenames = []
         return filenames
 
-    def get_caption(self, sent_ix):
+    def pretrain_embeddings(self):
+        captions_filepath = os.path.join(cfg.DATA_DIR, 'captions.pickle')
+        out_filepath = os.path.join(cfg.DATA_DIR, f'captions_{self.encoder_type}.pickle')
+        with open(captions_filepath, 'rb') as f:
+            x = pickle.load(f)
+            train_captions, test_captions = x[0], x[1]
+            ixtoword, wordtoix = x[2], x[3]
+            del x
+            n_words = len(ixtoword)
+            print('Load from: ', captions_filepath)
+
+        if self.encoder_type == "SBERT":
+            text_encoder = SentenceTransformer('distilbert-base-nli-stsb-mean-tokens')
+        elif self.encoder_type == "RNN":
+            text_encoder = RNN_ENCODER(n_words, nhidden=cfg.TEXT.EMBEDDING_DIM)
+            state_dict = torch.load(cfg.TEXT.DAMSM_NAME, map_location=lambda storage, loc: storage)
+            text_encoder.load_state_dict(state_dict)
+            text_encoder.cuda()
+        else:
+            print(f"Encoder type {self.encoder_type} not supported.")
+            raise Exception
+
+        # 0: Train embeds 1: Test embeds 2: Train strings 3: Test strings
+        x = [[], [], [], []]
+
+        for i, sent_ix in enumerate(tqdm(train_captions, desc="Generating train embeddings")):
+            sent_indexed, sent_raw, sent_len = self.preprocess_caption(sent_ix, ixtoword)
+            x[2].append(sent_raw)
+            if self.encoder_type == "SBERT":
+                x[0].append(text_encoder.encode(sent_raw))
+            elif self.encoder_type == "RNN":
+                hidden = text_encoder.init_hidden(1)
+                sent_indexed = torch.from_numpy(np.reshape(sent_indexed, (1, cfg.TEXT.WORDS_NUM))).cuda()
+                sent_len = torch.from_numpy(np.expand_dims(np.asarray(sent_len), axis=0)).cuda()
+                with torch.no_grad():
+                    words_embs, sent_emb = text_encoder(sent_indexed, sent_len, hidden)
+                x[0].append(np.squeeze(sent_emb.cpu().numpy()))
+
+        for i, sent_ix in enumerate(tqdm(test_captions,  desc="Generating test embeddings")):
+            sent_indexed, sent_raw, sent_len = self.preprocess_caption(sent_ix, ixtoword)
+            x[3].append(sent_raw)
+            if self.encoder_type == "SBERT":
+                x[1].append(text_encoder.encode(sent_raw))
+            elif self.encoder_type == "RNN":
+                hidden = text_encoder.init_hidden(1)
+                sent_indexed = torch.from_numpy(np.reshape(sent_indexed, (1, cfg.TEXT.WORDS_NUM))).cuda()
+                sent_len = torch.from_numpy(np.expand_dims(np.asarray(sent_len), axis=0)).cuda()
+                with torch.no_grad():
+                    words_embs, sent_emb = text_encoder(sent_indexed, sent_len, hidden)
+                x[1].append(np.squeeze(sent_emb.cpu().numpy()))
+
+        print(f"Saving embeddings to {out_filepath}")
+        with open(out_filepath, "wb") as out_file:
+            pickle.dump(x, out_file)
+
+    def preprocess_caption(self, caption, ixtoword):
         # a list of indices for a sentence
-        sent_caption = np.asarray(self.captions[sent_ix]).astype('int64')
+        sent_caption = np.asarray(caption).astype('int64')
         if (sent_caption == 0).sum() > 0:
             print('ERROR: do not need END (0) token', sent_caption)
         num_words = len(sent_caption)
@@ -284,7 +355,7 @@ class TextDataset(data.Dataset):
 
         sent_str = []
         for ix in sent_caption:
-            sent_str.append(self.ixtoword[ix])
+            sent_str.append(ixtoword[ix])
         sent_str = " ".join(sent_str)
         return sent_ix, sent_str.capitalize(), sent_len
 
@@ -295,7 +366,7 @@ class TextDataset(data.Dataset):
         #
         if self.bbox is not None:
             bbox = self.bbox[key]
-            data_dir = '%s/CUB_200_2011' % self.data_dir
+            data_dir = self.data_dir
         else:
             bbox = None
             data_dir = self.data_dir
@@ -306,8 +377,7 @@ class TextDataset(data.Dataset):
         # random select a sentence
         sent_ix = random.randint(0, self.embeddings_num)
         new_sent_ix = index * self.embeddings_num + sent_ix
-        caps_ix, caps_str, cap_len = self.get_caption(new_sent_ix)
-        return imgs, caps_ix, caps_str, cap_len, cls_id, key
+        return imgs, self.captions[new_sent_ix], self.raw_strings[new_sent_ix], cls_id, key
 
     def __len__(self):
         return len(self.filenames)
