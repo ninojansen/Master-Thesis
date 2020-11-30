@@ -13,6 +13,7 @@ import torchvision.transforms as transforms
 from nltk.tokenize import RegexpTokenizer
 from PIL import Image
 from torch.autograd import Variable
+from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 
 from misc.config import cfg
@@ -20,39 +21,9 @@ from misc.config import cfg
 if "sentence_transformers" in sys.modules:
     from sentence_transformers import SentenceTransformer
 
+import math
+
 from models import RNN_ENCODER
-
-
-def prepare_data(data):
-    imgs, captions_ix, captions_str, captions_lens, class_ids, keys = data
-
-    # sort data by the length in a decreasing order
-    sorted_cap_lens, sorted_cap_indices = \
-        torch.sort(captions_lens, 0, True)
-
-    real_imgs = []
-    for i in range(len(imgs)):
-        imgs[i] = imgs[i][sorted_cap_indices]
-        if cfg.CUDA:
-            real_imgs.append(Variable(imgs[i]).cuda())
-        else:
-            real_imgs.append(Variable(imgs[i]))
-
-    captions_ix = captions_ix[sorted_cap_indices].squeeze()
-    captions_str = np.asarray(captions_str)[sorted_cap_indices]
-    class_ids = class_ids[sorted_cap_indices].numpy()
-    # sent_indices = sent_indices[sorted_cap_indices]
-    keys = [keys[i] for i in sorted_cap_indices.numpy()]
-    # print('keys', type(keys), keys[-1])  # list
-    if cfg.CUDA:
-        captions_ix = Variable(captions_ix).cuda()
-        sorted_cap_lens = Variable(sorted_cap_lens).cuda()
-    else:
-        captions_ix = Variable(captions_ix)
-        sorted_cap_lens = Variable(sorted_cap_lens)
-
-    return [real_imgs, captions_ix, captions_str, sorted_cap_lens,
-            class_ids, keys]
 
 
 def get_imgs(img_path, imsize, bbox=None,
@@ -85,7 +56,64 @@ def get_imgs(img_path, imsize, bbox=None,
     return ret
 
 
-class TextDataset(data.Dataset):
+class CUB200DataModule(pl.LightningDataModule):
+
+    def __init__(self, data_dir=None, num_workers=4):
+        super().__init__()
+        self.data_dir = data_dir if data_dir else cfg.DATA_DIR
+        self.imsize = cfg.TREE.BASE_SIZE
+        self.batch_size = cfg.TRAIN.BATCH_SIZE
+        self.image_transform = transforms.Compose([
+            transforms.Resize(int(self.imsize * 76 / 64)),
+            transforms.RandomCrop(self.imsize),
+            transforms.RandomHorizontalFlip()])
+        # self.dims is returned when you call dm.size()
+        # Setting default dims here because we know them.
+        # Could optionally be assigned dynamically in dm.setup()
+        self.dims = (1, self.imsize, self.imsize)
+        self.num_workers = num_workers
+
+    # def prepare_data(self):
+    #     # download
+    #     MNIST(self.data_dir, train=True, download=True)
+    #     MNIST(self.data_dir, train=False, download=True)
+
+    def setup(self, stage=None):
+
+        # Assign train/val datasets for use in dataloaders
+        if stage == 'fit' or stage is None:
+            cub200_full = CUB200Dataset(self.data_dir, "train", self.imsize,
+                                        transform=self.image_transform, encoder_type=cfg.TEXT.ENCODER)
+            self.cub200_train = cub200_full
+            # size = len(cub200_full)
+            # train_size = math.ceil(size * 0.9)
+
+            # self.cub200_train, self.cub200_val = random_split(
+            #     cub200_full, [train_size, size - train_size],
+            #     generator=torch.Generator().manual_seed(42))
+
+        # Assign test dataset for use in dataloader(s)
+        if stage == 'test' or stage is None:
+            self.cub200_test = CUB200Dataset(self.data_dir, "test", self.imsize,
+                                             transform=self.image_transform, encoder_type=cfg.TEXT.ENCODER)
+
+            # Optionally...
+            # self.dims = tuple(self.mnist_test[0][0].shape)
+
+    def train_dataloader(self):
+        return DataLoader(self.cub200_train, batch_size=self.batch_size, drop_last=True,
+                          shuffle=True, num_workers=self.num_workers, pin_memory=True)
+
+    # def val_dataloader(self):
+    #     return DataLoader(self.cub200_val, batch_size=self.batch_size, drop_last=True,
+    #                       shuffle=True, num_workers=self.num_workers, pin_memory=True)
+
+    def test_dataloader(self):
+        return DataLoader(self.cub200_test, batch_size=self.batch_size, drop_last=True,
+                          shuffle=True, num_workers=self.num_workers, pin_memory=True)
+
+
+class CUB200Dataset(data.Dataset):
     def __init__(self, data_dir, split='train',
                  base_size=64,
                  transform=None, target_transform=None, encoder_type="RNN"):

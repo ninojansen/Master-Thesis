@@ -13,7 +13,6 @@ import shutil
 import datetime
 import dateutil.tz
 import random
-from apex import amp
 
 
 def init_output_folders(output_loc):
@@ -111,6 +110,7 @@ def train_step(data, netG, netD, optimizerG, optimizerD, batch_size, device):
     d_loss = 2.0 * d_loss_gp
     optimizerD.zero_grad()
     optimizerG.zero_grad()
+
     d_loss.backward()
     optimizerD.step()
 

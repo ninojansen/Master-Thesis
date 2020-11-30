@@ -1,17 +1,20 @@
-from misc.utils import mkdir_p
-from misc.config import cfg, cfg_from_file
-from datasets import TextDataset
-from trainer import train, sampling
+import argparse
+import multiprocessing
 import os
 import pprint
-import argparse
+
 import numpy as np
-from PIL import Image
 import torch
 import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
-from model import NetG, NetD
-import multiprocessing
+from PIL import Image
+
+from datasets import TextDataset
+from misc.config import cfg, cfg_from_file
+from misc.utils import mkdir_p
+from models import NetD, NetG
+from trainer import sampling, train
+
 multiprocessing.set_start_method('spawn', True)
 
 

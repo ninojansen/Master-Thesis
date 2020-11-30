@@ -1,8 +1,16 @@
+from collections import OrderedDict
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
 import torch.nn.functional as F
-from collections import OrderedDict
+import torch.nn.parallel
+import torch.utils.model_zoo as model_zoo
+from torch.autograd import Variable
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+from torchvision import models
+
+from misc.config import cfg
 
 
 class NetG(nn.Module):
@@ -211,3 +219,122 @@ class DownBlock(nn.Module):
 
     def residual(self, x):
         return self.conv_r(x)
+
+
+class RNN_ENCODER(nn.Module):
+    def __init__(self, ntoken, ninput=300, drop_prob=0.5,
+                 nhidden=128, nlayers=1, bidirectional=True):
+        super(RNN_ENCODER, self).__init__()
+        self.n_steps = cfg.TEXT.WORDS_NUM
+        self.ntoken = ntoken  # size of the dictionary
+        self.ninput = ninput  # size of each embedding vector
+        self.drop_prob = drop_prob  # probability of an element to be zeroed
+        self.nlayers = nlayers  # Number of recurrent layers
+        self.bidirectional = bidirectional
+        self.rnn_type = cfg.RNN_TYPE
+        if bidirectional:
+            self.num_directions = 2
+        else:
+            self.num_directions = 1
+        # number of features in the hidden state
+        self.nhidden = nhidden // self.num_directions
+
+        self.define_module()
+        self.init_weights()
+
+    def define_module(self):
+        self.encoder = nn.Embedding(self.ntoken, self.ninput)
+        self.drop = nn.Dropout(self.drop_prob)
+        if self.rnn_type == 'LSTM':
+            # dropout: If non-zero, introduces a dropout layer on
+            # the outputs of each RNN layer except the last layer
+            self.rnn = nn.LSTM(self.ninput, self.nhidden,
+                               self.nlayers, batch_first=True,
+                               dropout=self.drop_prob,
+                               bidirectional=self.bidirectional)
+        elif self.rnn_type == 'GRU':
+            self.rnn = nn.GRU(self.ninput, self.nhidden,
+                              self.nlayers, batch_first=True,
+                              dropout=self.drop_prob,
+                              bidirectional=self.bidirectional)
+        else:
+            raise NotImplementedError
+
+    def init_weights(self):
+        initrange = 0.1
+        self.encoder.weight.data.uniform_(-initrange, initrange)
+        # Do not need to initialize RNN parameters, which have been initialized
+        # http://pytorch.org/docs/master/_modules/torch/nn/modules/rnn.html#LSTM
+        # self.decoder.weight.data.uniform_(-initrange, initrange)
+        # self.decoder.bias.data.fill_(0)
+
+    def init_hidden(self, bsz):
+        weight = next(self.parameters()).data
+        if self.rnn_type == 'LSTM':
+            return (Variable(weight.new(self.nlayers * self.num_directions,
+                                        bsz, self.nhidden).zero_()),
+                    Variable(weight.new(self.nlayers * self.num_directions,
+                                        bsz, self.nhidden).zero_()))
+        else:
+            return Variable(weight.new(self.nlayers * self.num_directions,
+                                       bsz, self.nhidden).zero_())
+
+    def forward(self, captions, cap_lens, hidden, mask=None):
+        # input: torch.LongTensor of size batch x n_steps
+        # --> emb: batch x n_steps x ninput
+        emb = self.drop(self.encoder(captions))
+        #
+        # Returns: a PackedSequence object
+        cap_lens = cap_lens.data.tolist()
+        emb = pack_padded_sequence(emb, cap_lens, batch_first=True)
+        # #hidden and memory (num_layers * num_directions, batch, hidden_size):
+        # tensor containing the initial hidden state for each element in batch.
+        # #output (batch, seq_len, hidden_size * num_directions)
+        # #or a PackedSequence object:
+        # tensor containing output features (h_t) from the last layer of RNN
+        output, hidden = self.rnn(emb, hidden)
+        # PackedSequence object
+        # --> (batch, seq_len, hidden_size * num_directions)
+        output = pad_packed_sequence(output, batch_first=True)[0]
+        # output = self.drop(output)
+        # --> batch x hidden_size*num_directions x seq_len
+        words_emb = output.transpose(1, 2)
+        # --> batch x num_directions*hidden_size
+        if self.rnn_type == 'LSTM':
+            sent_emb = hidden[0].transpose(0, 1).contiguous()
+        else:
+            sent_emb = hidden.transpose(0, 1).contiguous()
+        sent_emb = sent_emb.view(-1, self.nhidden * self.num_directions)
+        return words_emb, sent_emb
+
+
+class INCEPTION_V3(nn.Module):
+    def __init__(self):
+        super(INCEPTION_V3, self).__init__()
+        self.model = models.inception_v3(pretrained=True, progress=True)
+        url = 'https://download.pytorch.org/models/inception_v3_google-1a9a5a14.pth'
+        # print(next(model.parameters()).data)
+        state_dict = \
+            model_zoo.load_url(url, map_location=lambda storage, loc: storage)
+        self.model.load_state_dict(state_dict)
+        for param in self.model.parameters():
+            param.requires_grad = False
+        print('Load pretrained model from ', url)
+        # print(next(self.model.parameters()).data)
+        # print(self.model)
+
+    def forward(self, input):
+        # [-1.0, 1.0] --> [0, 1.0]
+        x = input * 0.5 + 0.5
+        # mean=[0.485, 0.456, 0.406] and std=[0.229, 0.224, 0.225]
+        # --> mean = 0, std = 1
+        x[:, 0, :] = (x[:, 0, :] - 0.485) / 0.229
+        x[:, 1, :] = (x[:, 1, :] - 0.456) / 0.224
+        x[:, 2, :] = (x[:, 2, :] - 0.406) / 0.225
+        #
+        # --> fixed-size input: batch x 3 x 299 x 299
+        x = nn.Upsample(size=(299, 299), mode='bilinear', align_corners=True)(x)
+        # 299 x 299 x 3
+        x = self.model(x)
+        x = nn.Softmax(dim=0)(x)
+        return x

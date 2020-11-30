@@ -1,4 +1,6 @@
 .vscode
 *.pyc
 *.pyo
-*output
+output*
+*workspace
+*logs
