@@ -13,8 +13,6 @@ cfg = __C
 __C.DATASET_NAME = 'birds'
 __C.CONFIG_NAME = ''
 __C.DATA_DIR = ''
-__C.GPU_ID = 0
-__C.CUDA = True
 
 __C.RNN_TYPE = 'LSTM'   # 'GRU'
 __C.B_VALIDATION = False
@@ -60,7 +58,7 @@ __C.TEXT = edict()
 __C.TEXT.CAPTIONS_PER_IMAGE = 10
 __C.TEXT.EMBEDDING_DIM = 256
 __C.TEXT.WORDS_NUM = 18
-__C.TEXT.ENCODER = "LSTM"
+__C.TEXT.ENCODER = "RNN"
 __C.TEXT.DAMSM_NAME = '../DAMSMencoders/coco/text_encoder200.pth'
 
 

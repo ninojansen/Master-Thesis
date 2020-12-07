@@ -5,13 +5,13 @@ from torch.nn import init
 
 import torch
 import torch.nn as nn
-
+from scipy.stats import entropy
 from PIL import Image, ImageDraw, ImageFont
 from copy import deepcopy
 import skimage.transform
 
 from misc.config import cfg
-
+import matplotlib.pyplot as plt
 
 # For visualization ################################################
 COLOR_DIC = {0: [128, 64, 128],  1: [244, 35, 232],
@@ -318,3 +318,71 @@ def mkdir_p(path):
             pass
         else:
             raise
+
+
+def image_grid(images_tensor, labels):
+    # Create a figure to contain the plot.
+    # ndarr = grid.mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy()
+    images_tensor = images_tensor.clone()
+
+    min = float(images_tensor.min())
+    max = float(images_tensor.max())
+    images_tensor.clamp_(min=min, max=max)
+    images_tensor.add_(-min).div_(max - min + 1e-5)
+
+    processed_images = images_tensor.mul(255).add_(0.5).clamp_(
+        0, 255).permute(
+        0, 2, 3, 1).to(
+        'cpu', torch.uint8).numpy()
+
+    figure = plt.figure(figsize=(10, 10))
+    plt.rcParams.update({'font.size': 5})
+    plt.tight_layout()
+    for i in range(16):
+        # Start next subplot.
+        plt.subplot(4, 4, i + 1, xlabel=add_linebreaks(labels[i]))
+        plt.xticks([])
+        plt.yticks([])
+        plt.grid(False)
+        plt.imshow(processed_images[i])
+    # plt.show()
+    figure.canvas.draw()
+    buf = figure.canvas.tostring_rgb()
+    ncols, nrows = figure.canvas.get_width_height()
+    shape = (nrows, ncols, 3)
+    img_arr = np.fromstring(buf, dtype=np.uint8).reshape(shape)
+    # io_buf = io.BytesIO()
+    # figure.savefig(io_buf, format='raw')
+    # io_buf.seek(0)
+    # img_arr = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
+    #                      newshape=(int(figure.bbox.bounds[3]), int(figure.bbox.bounds[2]), -1))
+    # io_buf.close()
+
+    return torch.from_numpy(img_arr)
+
+
+def add_linebreaks(str, n_split=7):
+    split = str.split()
+    out = []
+    for i, part in enumerate(split):
+        out.append(part)
+        if (i+1) % n_split == 0:
+            out.append("\n")
+    return " ".join(out)
+
+
+def compute_inception_score(preds, num_splits=1):
+    N = preds.shape[0]
+    # Now compute the mean kl-div
+    split_scores = []
+
+    for k in range(num_splits):
+        part = preds[k * (N // num_splits): (k+1) * (N // num_splits), :]
+        py = np.mean(part, axis=0)
+        scores = []
+        for i in range(part.shape[0]):
+            pyx = part[i, :]
+            scores.append(entropy(pyx, py))
+        split_scores.append(np.exp(np.mean(scores)))
+
+    return np.mean(split_scores), np.std(split_scores)

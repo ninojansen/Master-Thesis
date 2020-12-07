@@ -2,19 +2,18 @@ import argparse
 import multiprocessing
 import os
 import pprint
-
+import pytorch_lightning as pl
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 from PIL import Image
-
-from datasets import TextDataset
+from pytorch_lightning.loggers import TensorBoardLogger
+from datasets import CUB200DataModule
 from misc.config import cfg, cfg_from_file
 from misc.utils import mkdir_p
-from models import NetD, NetG
-from trainer import sampling, train
-
+from trainer import DFGAN
+from pytorch_lightning.callbacks import GPUStatsMonitor
 multiprocessing.set_start_method('spawn', True)
 
 
@@ -23,10 +22,14 @@ def parse_args():
     parser.add_argument('--cfg', dest='cfg_file',
                         help='optional config file',
                         default='cfg/bird.yml', type=str)
-    parser.add_argument('--data_dir', dest='data_dir', type=str, default='')
-    parser.add_argument('-hp', dest='hide_progress', action='store_true', default=False)
-    parser.add_argument('--output_dir', dest='output_dir', type=str, default='./')
-    parser.add_argument('--manualSeed', type=int, help='manual seed')
+    parser.add_argument('--datadir', dest='data_dir', type=str, default='')
+    parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
+    parser.add_argument('--ckpt', dest='ckpt', type=str, default=None)
+    parser.add_argument('--test', dest='test', action="store_true", default=False)
+    parser = pl.Trainer.add_argparse_args(parser)
+    parser.set_defaults(gpus=1)
+    parser.set_defaults(max_epochs=None)
+
     args = parser.parse_args()
     return args
 
@@ -39,50 +42,38 @@ if __name__ == "__main__":
     if args.data_dir != '':
         cfg.DATA_DIR = args.data_dir
 
+    if args.max_epochs:
+        cfg.TRAIN.MAX_EPOCH = args.max_epochs
     print('Using config:')
     pprint.pprint(cfg)
 
-    ##########################################################################
-    num_worker = 4 * torch.cuda.device_count()
-    torch.cuda.set_device(0)
-    cudnn.benchmark = True
+    CUB200 = CUB200DataModule(data_dir=cfg.DATA_DIR, num_workers=4*args.gpus)
 
-    # Get data loader ##################################################
-    imsize = cfg.TREE.BASE_SIZE
-    batch_size = cfg.TRAIN.BATCH_SIZE
-    image_transform = transforms.Compose([
-        transforms.Resize(int(imsize * 76 / 64)),
-        transforms.RandomCrop(imsize),
-        transforms.RandomHorizontalFlip()])
+    logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME)
+    # --fast_dev_run // Does 1 batch and 1 epoch for quick
+    # --precision 16 // for 16-bit precision
+    # --progress_bar_refresh_rate 0  // Disable progress bar
+    # --num_nodes 2 // Num of pereregrine nodes
+    # --gpus 1 // Num of gpus per node
+    # --accelerator ddp // Accelerator to train across multiple nodes on peregrine
 
-    if cfg.B_VALIDATION:
-        dataset = TextDataset(cfg.DATA_DIR, 'test',
-                              base_size=cfg.TREE.BASE_SIZE,
-                              transform=image_transform, encoder_type=cfg.TEXT.ENCODER)
-        assert dataset
-        dataloader = torch.utils.data.DataLoader(
-            dataset, batch_size=batch_size, drop_last=True,
-            shuffle=True, num_workers=num_worker, pin_memory=True)
+    trainer = pl.Trainer.from_argparse_args(
+        args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=logger, log_gpu_memory=True,
+        automatic_optimization=False, default_root_dir=args.output_dir)
+
+    if args.ckpt:
+        model = DFGAN.load_from_checkpoint(args.ckpt)
     else:
-        dataset = TextDataset(cfg.DATA_DIR, 'train',
-                              base_size=cfg.TREE.BASE_SIZE,
-                              transform=image_transform, encoder_type=cfg.TEXT.ENCODER)
-        assert dataset
-        dataloader = torch.utils.data.DataLoader(
-            dataset, batch_size=batch_size, drop_last=True,
-            shuffle=True, num_workers=num_worker, pin_memory=True)
+        model = DFGAN(cfg)
 
-    # validation data #
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    netG = NetG(cfg.TRAIN.NF, 100, cfg.TEXT.EMBEDDING_DIM, cfg.TREE.BASE_SIZE).to(device)
-    netD = NetD(cfg.TRAIN.NF, cfg.TEXT.EMBEDDING_DIM,  cfg.TREE.BASE_SIZE).to(device)
-
-    state_epoch = 0
-
-    if cfg.B_VALIDATION:
-        count = sampling(netG, dataloader, device)  # generate images for the whole valid dataset
+    if args.test:
+        # Only test the network
+        print("Test argument specififed; Running testing loop using specified model")
+        CUB200.setup(stage="test")
+        result = trainer.test(model, test_dataloaders=CUB200.test_dataloader())
+        print(result)
     else:
-        train(args.output_dir, dataloader, netG, netD, state_epoch,
-              batch_size, device, hide_progress=args.hide_progress)
+        # Train and test the network when finished training
+        trainer.fit(model, CUB200)
+        result = trainer.test(model)
+        print(result)
