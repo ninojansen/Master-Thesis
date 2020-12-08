@@ -357,7 +357,7 @@ def image_grid(images_tensor, labels):
     # img_arr = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
     #                      newshape=(int(figure.bbox.bounds[3]), int(figure.bbox.bounds[2]), -1))
     # io_buf.close()
-
+    figure.close()
     return torch.from_numpy(img_arr)
 
 
