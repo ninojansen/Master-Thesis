@@ -1,172 +1,392 @@
-from collections import OrderedDict
-
+import os
+import errno
 import numpy as np
-import pytorch_lightning as pl
+from torch.nn import init
+
 import torch
-import torch.nn.functional as F
-import torchvision
-import random
-from pytorch_lightning.callbacks import GPUStatsMonitor
-from pytorch_lightning.loggers import TensorBoardLogger
+import torch.nn as nn
 from scipy.stats import entropy
-from torch import nn
-from torch.utils.data import DataLoader, random_split
-from torchvision import transforms
-from torchvision.datasets import MNIST
-from easydict import EasyDict as edict
-import time
-from models import INCEPTION_V3, NetD, NetG
-from misc.utils import image_grid, compute_inception_score
+from PIL import Image, ImageDraw, ImageFont
+from copy import deepcopy
+import skimage.transform
+
+from misc.config import cfg
 import matplotlib.pyplot as plt
-import io
-from PIL import Image
+
+# For visualization ################################################
+COLOR_DIC = {0: [128, 64, 128],  1: [244, 35, 232],
+             2: [70, 70, 70],  3: [102, 102, 156],
+             4: [190, 153, 153], 5: [153, 153, 153],
+             6: [250, 170, 30], 7: [220, 220, 0],
+             8: [107, 142, 35], 9: [152, 251, 152],
+             10: [70, 130, 180], 11: [220, 20, 60],
+             12: [255, 0, 0],  13: [0, 0, 142],
+             14: [119, 11, 32], 15: [0, 60, 100],
+             16: [0, 80, 100], 17: [0, 0, 230],
+             18: [0,  0, 70],  19: [0, 0,  0]}
+FONT_MAX = 50
 
 
-class DFGAN(pl.LightningModule):
-    def __init__(self, cfg, **kwargs):
-        super().__init__()
-        #self.save_hyperparameters(self.cfg.TREE.BASE_SIZE, self.cfg.TRAIN.NF, self.cfg.TEXT.EMBEDDING_DIM, )
-        self.cfg = cfg
-        self.save_hyperparameters(self.cfg)
+def drawCaption(convas, captions, ixtoword, vis_size, off1=2, off2=2):
+    num = captions.size(0)
+    img_txt = Image.fromarray(convas)
+    # get a font
+    # fnt = None  # ImageFont.truetype('Pillow/Tests/fonts/FreeMono.ttf', 50)
+    fnt = ImageFont.truetype('Pillow/Tests/fonts/FreeMono.ttf', 50)
+    # get a drawing context
+    d = ImageDraw.Draw(img_txt)
+    sentence_list = []
+    for i in range(num):
+        cap = captions[i].data.cpu().numpy()
+        sentence = []
+        for j in range(len(cap)):
+            if cap[j] == 0:
+                break
+            word = ixtoword[cap[j]].encode('ascii', 'ignore').decode('ascii')
+            d.text(((j + off1) * (vis_size + off2), i * FONT_MAX), '%d:%s' % (j, word[:6]),
+                   font=fnt, fill=(255, 255, 255, 255))
+            sentence.append(word)
+        sentence_list.append(sentence)
+    return img_txt, sentence_list
 
-        # networks
-        self.cfg = edict(cfg)
-        self.generator = self.init_generator()
-        self.discriminator = self.init_discriminator()
-        self.inception_model = INCEPTION_V3()
-        self.predictions = []
-        self.start = time.perf_counter()
 
-    def init_generator(self):
-        generator = NetG(self.cfg.TRAIN.NF, 100, self.cfg.TEXT.EMBEDDING_DIM, self.cfg.TREE.BASE_SIZE)
-        return generator
+def build_super_images(real_imgs, captions, ixtoword,
+                       attn_maps, att_sze, lr_imgs=None,
+                       batch_size=cfg.TRAIN.BATCH_SIZE,
+                       max_word_num=cfg.TEXT.WORDS_NUM):
+    nvis = 8
+    real_imgs = real_imgs[:nvis]
+    if lr_imgs is not None:
+        lr_imgs = lr_imgs[:nvis]
+    if att_sze == 17:
+        vis_size = att_sze * 16
+    else:
+        vis_size = real_imgs.size(2)
 
-    def init_discriminator(self):
-        discriminator = NetD(self.cfg.TRAIN.NF, self.cfg.TEXT.EMBEDDING_DIM,  self.cfg.TREE.BASE_SIZE)
-        return discriminator
+    text_convas = \
+        np.ones([batch_size * FONT_MAX,
+                 (max_word_num + 2) * (vis_size + 2), 3],
+                dtype=np.uint8)
 
-    def forward(self, z, embeds):
-        return self.generator(z, embeds)
+    for i in range(max_word_num):
+        istart = (i + 2) * (vis_size + 2)
+        iend = (i + 3) * (vis_size + 2)
+        text_convas[:, istart:iend, :] = COLOR_DIC[i]
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
-        real_images, caption_embeds, captions_str, class_ids, keys = batch
-        self.last_embeds = caption_embeds
-        self.last_str = captions_str
+    real_imgs = \
+        nn.functional.interpolate(real_imgs, size=(vis_size, vis_size),
+                                  mode='bilinear', align_corners=False)
+    # [-1, 1] --> [0, 1]
+    real_imgs.add_(1).div_(2).mul_(255)
+    real_imgs = real_imgs.data.numpy()
+    # b x c x h x w --> b x h x w x c
+    real_imgs = np.transpose(real_imgs, (0, 2, 3, 1))
+    pad_sze = real_imgs.shape
+    middle_pad = np.zeros([pad_sze[2], 2, 3])
+    post_pad = np.zeros([pad_sze[1], pad_sze[2], 3])
+    if lr_imgs is not None:
+        lr_imgs = \
+            nn.functional.interpolate(lr_imgs, size=(vis_size, vis_size),
+                                      mode='bilinear', align_corners=False)
+        # [-1, 1] --> [0, 1]
+        lr_imgs.add_(1).div_(2).mul_(255)
+        lr_imgs = lr_imgs.data.numpy()
+        # b x c x h x w --> b x h x w x c
+        lr_imgs = np.transpose(lr_imgs, (0, 2, 3, 1))
 
-        real_images = real_images[0]
-        batch_size = self.cfg.TRAIN.BATCH_SIZE
-        # ignore optimizer_idx
-        (opt_g, opt_d) = self.configure_optimizers()
+    # batch x seq_len x 17 x 17 --> batch x 1 x 17 x 17
+    seq_len = max_word_num
+    img_set = []
+    num = nvis  # len(attn_maps)
 
-        # Calculate D errors on real data and mismatched data
-        real_features = self.discriminator(real_images)
-        output = self.discriminator.COND_DNET(real_features, caption_embeds)
-        d_loss_real = torch.nn.ReLU()(1.0 - output).mean()
+    text_map, sentences = \
+        drawCaption(text_convas, captions, ixtoword, vis_size)
+    text_map = np.asarray(text_map).astype(np.uint8)
 
-        output = self.discriminator.COND_DNET(real_features[:(batch_size - 1)], caption_embeds[1:batch_size])
-        d_loss_mismatch = torch.nn.ReLU()(1.0 + output).mean()
+    bUpdate = 1
+    for i in range(num):
+        attn = attn_maps[i].cpu().view(1, -1, att_sze, att_sze)
+        # --> 1 x 1 x 17 x 17
+        attn_max = attn.max(dim=1, keepdim=True)
+        attn = torch.cat([attn_max[0], attn], 1)
+        #
+        attn = attn.view(-1, 1, att_sze, att_sze)
+        attn = attn.repeat(1, 3, 1, 1).data.numpy()
+        # n x c x h x w --> n x h x w x c
+        attn = np.transpose(attn, (0, 2, 3, 1))
+        num_attn = attn.shape[0]
+        #
+        img = real_imgs[i]
+        if lr_imgs is None:
+            lrI = img
+        else:
+            lrI = lr_imgs[i]
+        row = [lrI, middle_pad]
+        row_merge = [img, middle_pad]
+        row_beforeNorm = []
+        minVglobal, maxVglobal = 1, 0
+        for j in range(num_attn):
+            one_map = attn[j]
+            if (vis_size // att_sze) > 1:
+                one_map = \
+                    skimage.transform.pyramid_expand(one_map, sigma=20,
+                                                     upscale=vis_size // att_sze,
+                                                     multichannel=True)
+            row_beforeNorm.append(one_map)
+            minV = one_map.min()
+            maxV = one_map.max()
+            if minVglobal > minV:
+                minVglobal = minV
+            if maxVglobal < maxV:
+                maxVglobal = maxV
+        for j in range(seq_len + 1):
+            if j < num_attn:
+                one_map = row_beforeNorm[j]
+                one_map = (one_map - minVglobal) / (maxVglobal - minVglobal)
+                one_map *= 255
+                #
+                PIL_im = Image.fromarray(np.uint8(img))
+                PIL_att = Image.fromarray(np.uint8(one_map))
+                merged = \
+                    Image.new('RGBA', (vis_size, vis_size), (0, 0, 0, 0))
+                mask = Image.new('L', (vis_size, vis_size), (210))
+                merged.paste(PIL_im, (0, 0))
+                merged.paste(PIL_att, (0, 0), mask)
+                merged = np.array(merged)[:, :, :3]
+            else:
+                one_map = post_pad
+                merged = post_pad
+            row.append(one_map)
+            row.append(middle_pad)
+            #
+            row_merge.append(merged)
+            row_merge.append(middle_pad)
+        row = np.concatenate(row, 1)
+        row_merge = np.concatenate(row_merge, 1)
+        txt = text_map[i * FONT_MAX: (i + 1) * FONT_MAX]
+        if txt.shape[1] != row.shape[1]:
+            print('txt', txt.shape, 'row', row.shape)
+            bUpdate = 0
+            break
+        row = np.concatenate([txt, row, row_merge], 0)
+        img_set.append(row)
+    if bUpdate:
+        img_set = np.concatenate(img_set, 0)
+        img_set = img_set.astype(np.uint8)
+        return img_set, sentences
+    else:
+        return None
 
-        # Generate images
-        z = torch.randn(batch_size, 100).type_as(real_images)
-        fake_images = self.forward(z, caption_embeds)
 
-        # Calculate D error on generated images
-        fake_features = self.discriminator(fake_images.detach())
-        d_loss_fake = self.discriminator.COND_DNET(fake_features, caption_embeds)
-        d_loss_fake = torch.nn.ReLU()(1.0 + d_loss_fake).mean()
+def build_super_images2(real_imgs, captions, cap_lens, ixtoword,
+                        attn_maps, att_sze, vis_size=256, topK=5):
+    batch_size = real_imgs.size(0)
+    max_word_num = np.max(cap_lens)
+    text_convas = np.ones([batch_size * FONT_MAX,
+                           max_word_num * (vis_size + 2), 3],
+                          dtype=np.uint8)
 
-        d_loss = d_loss_real + (d_loss_fake + d_loss_mismatch)/2.0
+    real_imgs = \
+        nn.functional.interpolate(real_imgs, size=(vis_size, vis_size),
+                                  mode='bilinear', align_corners=False)
+    # [-1, 1] --> [0, 1]
+    real_imgs.add_(1).div_(2).mul_(255)
+    real_imgs = real_imgs.data.numpy()
+    # b x c x h x w --> b x h x w x c
+    real_imgs = np.transpose(real_imgs, (0, 2, 3, 1))
+    pad_sze = real_imgs.shape
+    middle_pad = np.zeros([pad_sze[2], 2, 3])
 
-        # Update the discriminator with the regular loss
-        opt_d.zero_grad()
-        opt_g.zero_grad()
-        self.manual_backward(d_loss, opt_d)
-        self.manual_optimizer_step(opt_d)
+    # batch x seq_len x 17 x 17 --> batch x 1 x 17 x 17
+    img_set = []
+    num = len(attn_maps)
 
-        # Update the discriminator loss with MA-GP
-        interpolated = (real_images.data).requires_grad_()
-        sent_inter = (caption_embeds.data).requires_grad_()
-        features = self.discriminator(interpolated)
-        out = self.discriminator.COND_DNET(features, sent_inter)
-        grads = torch.autograd.grad(outputs=out,
-                                    inputs=(interpolated, sent_inter),
-                                    grad_outputs=torch.ones(out.size()).cuda(),
-                                    retain_graph=True,
-                                    create_graph=True,
-                                    only_inputs=True)
-        grad0 = grads[0].view(grads[0].size(0), -1)
-        grad1 = grads[1].view(grads[1].size(0), -1)
-        grad = torch.cat((grad0, grad1), dim=1)
-        grad_l2norm = torch.sqrt(torch.sum(grad ** 2, dim=1))
-        d_loss_gp = torch.mean((grad_l2norm) ** 6)
-        d_loss_gp = 2.0 * d_loss_gp
-        opt_d.zero_grad()
-        opt_g.zero_grad()
-        self.manual_backward(d_loss_gp, opt_d)
-        self.manual_optimizer_step(opt_d)
+    text_map, sentences = \
+        drawCaption(text_convas, captions, ixtoword, vis_size, off1=0)
+    text_map = np.asarray(text_map).astype(np.uint8)
 
-        # Update the Generator through adversarial loss
-        features = self.discriminator(fake_images)
-        output = self.discriminator.COND_DNET(features, caption_embeds)
-        g_loss = - output.mean()
-        opt_g.zero_grad()
-        opt_d.zero_grad()
-        self.manual_backward(g_loss, opt_g)
-        self.manual_optimizer_step(opt_g)
-        # log losses
-        self.log('d_loss', d_loss+d_loss_gp, prog_bar=True)
-        self.log('g_loss', g_loss, prog_bar=True)
+    bUpdate = 1
+    for i in range(num):
+        attn = attn_maps[i].cpu().view(1, -1, att_sze, att_sze)
+        #
+        attn = attn.view(-1, 1, att_sze, att_sze)
+        attn = attn.repeat(1, 3, 1, 1).data.numpy()
+        # n x c x h x w --> n x h x w x c
+        attn = np.transpose(attn, (0, 2, 3, 1))
+        num_attn = cap_lens[i]
+        thresh = 2./float(num_attn)
+        #
+        img = real_imgs[i]
+        row = []
+        row_merge = []
+        row_txt = []
+        row_beforeNorm = []
+        conf_score = []
+        for j in range(num_attn):
+            one_map = attn[j]
+            mask0 = one_map > (2. * thresh)
+            conf_score.append(np.sum(one_map * mask0))
+            mask = one_map > thresh
+            one_map = one_map * mask
+            if (vis_size // att_sze) > 1:
+                one_map = \
+                    skimage.transform.pyramid_expand(one_map, sigma=20,
+                                                     upscale=vis_size // att_sze,
+                                                     multichannel=True)
+            minV = one_map.min()
+            maxV = one_map.max()
+            one_map = (one_map - minV) / (maxV - minV)
+            row_beforeNorm.append(one_map)
+        sorted_indices = np.argsort(conf_score)[::-1]
 
-        self.inception_model.eval()
-      #  pred = self.inception_model(fake_images[-1].unsqueeze(0).detach())
-     #   pred = self.inception_model(fake_images.detach()).data.cpu().numpy()
-        self.predictions.append(self.inception_model(fake_images.detach()[:5]).data.cpu().numpy())
+        for j in range(num_attn):
+            one_map = row_beforeNorm[j]
+            one_map *= 255
+            #
+            PIL_im = Image.fromarray(np.uint8(img))
+            PIL_att = Image.fromarray(np.uint8(one_map))
+            merged = \
+                Image.new('RGBA', (vis_size, vis_size), (0, 0, 0, 0))
+            mask = Image.new('L', (vis_size, vis_size), (180))  # (210)
+            merged.paste(PIL_im, (0, 0))
+            merged.paste(PIL_att, (0, 0), mask)
+            merged = np.array(merged)[:, :, :3]
 
-    def test_step(self, batch, batch_idx):
-        real_images, caption_embeds, captions_str, class_ids, keys = batch
+            row.append(np.concatenate([one_map, middle_pad], 1))
+            #
+            row_merge.append(np.concatenate([merged, middle_pad], 1))
+            #
+            txt = text_map[i * FONT_MAX:(i + 1) * FONT_MAX,
+                           j * (vis_size + 2):(j + 1) * (vis_size + 2), :]
+            row_txt.append(txt)
+        # reorder
+        row_new = []
+        row_merge_new = []
+        txt_new = []
+        for j in range(num_attn):
+            idx = sorted_indices[j]
+            row_new.append(row[idx])
+            row_merge_new.append(row_merge[idx])
+            txt_new.append(row_txt[idx])
+        row = np.concatenate(row_new[:topK], 1)
+        row_merge = np.concatenate(row_merge_new[:topK], 1)
+        txt = np.concatenate(txt_new[:topK], 1)
+        if txt.shape[1] != row.shape[1]:
+            print('Warnings: txt', txt.shape, 'row', row.shape,
+                  'row_merge_new', row_merge_new.shape)
+            bUpdate = 0
+            break
+        row = np.concatenate([txt, row_merge], 0)
+        img_set.append(row)
+    if bUpdate:
+        img_set = np.concatenate(img_set, 0)
+        img_set = img_set.astype(np.uint8)
+        return img_set, sentences
+    else:
+        return None
 
-        batch_size = self.cfg.TRAIN.BATCH_SIZE
-        # Generate images
-        z = torch.randn(batch_size, 100).type_as(caption_embeds)
-        fake_images = self.forward(z, caption_embeds)
 
-        self.inception_model.eval()
-        pred = self.inception_model(fake_images.detach()).data.cpu().numpy()
-        incep_mean, incep_std = compute_inception_score(pred, num_splits=1)
+####################################################################
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        nn.init.orthogonal_(m.weight.data, 1.0)
+    elif classname.find('BatchNorm') != -1:
+        m.weight.data.normal_(1.0, 0.02)
+        m.bias.data.fill_(0)
+    elif classname.find('Linear') != -1:
+        nn.init.orthogonal_(m.weight.data, 1.0)
+        if m.bias is not None:
+            m.bias.data.fill_(0.0)
 
-        self.log("test_incep_mean", incep_mean)
 
-    def configure_optimizers(self,):
-        opt_g = torch.optim.Adam(self.generator.parameters(), lr=self.cfg.TRAIN.GENERATOR_LR, betas=(0.0, 0.9))
-        opt_d = torch.optim.Adam(self.discriminator.parameters(), lr=self.cfg.TRAIN.DISCRIMINATOR_LR, betas=(0.0, 0.9))
-        return opt_g, opt_d
+def load_params(model, new_param):
+    for p, new_p in zip(model.parameters(), new_param):
+        p.data.copy_(new_p)
 
-    def on_epoch_end(self):
-        z = torch.randn(self.cfg.TRAIN.BATCH_SIZE, 100).type_as(self.last_embeds)
-        with torch.no_grad():
-            fake_images = self.forward(z, self.last_embeds)
 
-       # grid_xx = self.image_grid(np.swapaxes(fake_images.data.cpu().numpy(), 1, 3), self.last_str)
-        grid = image_grid(fake_images, self.last_str)
-        #grid = torchvision.utils.make_grid(fake_images, normalize=True)
-        self.logger.experiment.add_image(f"Epoch {self.current_epoch}", grid,
-                                         global_step=self.current_epoch, dataformats="HWC")
+def copy_G_params(model):
+    flatten = deepcopy(list(p.data for p in model.parameters()))
+    return flatten
 
-        pred = np.asfarray(self.predictions)
-        pred = np.reshape(pred, (pred.shape[0] * pred.shape[1], 1000))
-        incep_mean, incep_std = compute_inception_score(pred, num_splits=10)
 
-        self.log("val_incep_mean", incep_mean)
-       # self.logger.experiment.add_scalar("Inception Mean", incep_mean, self.current_epoch)
-        self.predictions = []
-        elapsed_time = time.perf_counter() - self.start
-        self.start = time.perf_counter()
-        self.logger.experiment.add_scalar("Elapsed Time per epoch", elapsed_time, self.current_epoch)
-        self.print(f"Epoch {self.current_epoch} took {elapsed_time} seconds val_incep_={incep_mean}")
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
 
-    def get_progress_bar_dict(self):
-        # don't show the version number
-        items = super().get_progress_bar_dict()
-        items.pop("v_num", None)
-        items.pop("loss", None)
-        return items
+
+def image_grid(images_tensor, labels):
+    # Create a figure to contain the plot.
+    # ndarr = grid.mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy()
+    images_tensor = images_tensor.clone()
+
+    min = float(images_tensor.min())
+    max = float(images_tensor.max())
+    images_tensor.clamp_(min=min, max=max)
+    images_tensor.add_(-min).div_(max - min + 1e-5)
+
+    processed_images = images_tensor.mul(255).add_(0.5).clamp_(
+        0, 255).permute(
+        0, 2, 3, 1).to(
+        'cpu', torch.uint8).numpy()
+
+    figure = plt.figure(figsize=(10, 10))
+    plt.rcParams.update({'font.size': 5})
+    plt.tight_layout()
+
+    n_images = 16
+    if len(labels) < 16:
+        n_images = len(labels)
+    for i in range(n_images):
+        # Start next subplot.
+        plt.subplot(4, 4, i + 1, xlabel=add_linebreaks(labels[i]))
+        plt.xticks([])
+        plt.yticks([])
+        plt.grid(False)
+        plt.imshow(processed_images[i])
+    # plt.show()
+    figure.canvas.draw()
+    buf = figure.canvas.tostring_rgb()
+    ncols, nrows = figure.canvas.get_width_height()
+    shape = (nrows, ncols, 3)
+    img_arr = np.fromstring(buf, dtype=np.uint8).reshape(shape)
+    # io_buf = io.BytesIO()
+    # figure.savefig(io_buf, format='raw')
+    # io_buf.seek(0)
+    # img_arr = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
+    #                      newshape=(int(figure.bbox.bounds[3]), int(figure.bbox.bounds[2]), -1))
+    # io_buf.close()
+
+    return torch.from_numpy(img_arr)
+
+
+def add_linebreaks(str, n_split=7):
+    split = str.split()
+    out = []
+    for i, part in enumerate(split):
+        out.append(part)
+        if (i+1) % n_split == 0:
+            out.append("\n")
+    return " ".join(out)
+
+
+def compute_inception_score(preds, num_splits=1):
+    N = preds.shape[0]
+    # Now compute the mean kl-div
+    split_scores = []
+
+    for k in range(num_splits):
+        part = preds[k * (N // num_splits): (k+1) * (N // num_splits), :]
+        py = np.mean(part, axis=0)
+        scores = []
+        for i in range(part.shape[0]):
+            pyx = part[i, :]
+            scores.append(entropy(pyx, py))
+        split_scores.append(np.exp(np.mean(scores)))
+
+    return np.mean(split_scores), np.std(split_scores)

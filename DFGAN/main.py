@@ -14,7 +14,7 @@ from misc.config import cfg, cfg_from_file
 from misc.utils import mkdir_p
 from trainer import DFGAN
 from pytorch_lightning.callbacks import GPUStatsMonitor
-multiprocessing.set_start_method('spawn', True)
+#multiprocessing.set_start_method('spawn', True)
 
 
 def parse_args():
@@ -24,10 +24,11 @@ def parse_args():
                         default='cfg/bird.yml', type=str)
     parser.add_argument('--datadir', dest='data_dir', type=str, default='')
     parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
+    parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
     parser.add_argument('--ckpt', dest='ckpt', type=str, default=None)
     parser.add_argument('--test', dest='test', action="store_true", default=False)
     parser = pl.Trainer.add_argparse_args(parser)
-    parser.set_defaults(gpus=1)
+    parser.set_defaults(gpus=-1)
     parser.set_defaults(max_epochs=None)
 
     args = parser.parse_args()
@@ -47,7 +48,16 @@ if __name__ == "__main__":
     print('Using config:')
     pprint.pprint(cfg)
 
-    CUB200 = CUB200DataModule(data_dir=cfg.DATA_DIR, num_workers=4*args.gpus)
+    pl.utilities.seed.seed_everything(seed=1996)
+    if args.num_workers:
+        num_workers = args.num_workers
+    elif args.gpus == -1:
+        num_workers = 4 * torch.cuda.device_count()
+    else:
+        num_workers = 4 * args.gpus
+
+  #  num_workers = multiprocessing.cpu_count()
+    CUB200 = CUB200DataModule(data_dir=cfg.DATA_DIR, num_workers=num_workers)
 
     logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME)
     # --fast_dev_run // Does 1 batch and 1 epoch for quick
