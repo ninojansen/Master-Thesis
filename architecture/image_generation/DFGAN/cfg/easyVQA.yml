@@ -1,0 +1,22 @@
+CONFIG_NAME: "easy_vqa"
+
+DATASET_NAME: "easyVQA"
+DATA_DIR: "/home/nino/Documents/Datasets/EasyVQA/data"
+
+loss: "hinge"
+
+TREE:
+  BRANCH_NUM: 1
+  BASE_SIZE: 64
+
+TRAIN:
+  NF: 32 # default 64
+  BATCH_SIZE: 256 #default 24
+  MAX_EPOCH: 601
+  DISCRIMINATOR_LR: 0.0004
+  GENERATOR_LR: 0.0001
+  NET_G: ""
+
+TEXT:
+  EMBEDDING_DIM: 768 #256
+  ENCODER: "SBERT"

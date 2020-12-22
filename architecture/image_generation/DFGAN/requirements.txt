@@ -1,0 +1,2 @@
+pip3 install git+https://github.com/PyTorchLightning/pytorch-lightning@master --upgrade
+pip3 install pytorch-lightning-bolts
