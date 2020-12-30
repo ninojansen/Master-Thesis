@@ -1,0 +1,19 @@
+CONFIG_NAME: "easy_vqa"
+
+DATASET_NAME: "easy_vqa"
+DATA_DIR: "/home/nino/Documents/Datasets/EasyVQA/data"
+
+IM_SIZE: 64
+
+MODEL:
+  NF: 16
+  Z_DIM: 100
+
+TRAIN:
+  BATCH_SIZE: 24 #default 24
+  MAX_EPOCH: 601
+  LR: 0.0002
+  CHECKPOINT: ""
+
+TEST:
+  CHECKPOINT: ""

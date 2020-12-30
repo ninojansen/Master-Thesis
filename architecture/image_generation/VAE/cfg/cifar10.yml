@@ -1,0 +1,19 @@
+CONFIG_NAME: "cifar10"
+
+DATASET_NAME: "cifar10"
+DATA_DIR: "/home/nino/Documents/Datasets/cifar10/"
+
+IM_SIZE: 32
+
+MODEL:
+  NF: 128
+  Z_DIM: 128
+
+TRAIN:
+  BATCH_SIZE: 64 #default 24
+  MAX_EPOCH: 601
+  LR: 0.0002
+  CHECKPOINT: ""
+
+TEST:
+  CHECKPOINT: ""
