@@ -50,7 +50,6 @@ if __name__ == "__main__":
     print('Using config:')
     pprint.pprint(cfg)
 
-    pl.utilities.seed.seed_everything(seed=1996)
     if args.num_workers:
         num_workers = args.num_workers
     elif args.gpus == -1:

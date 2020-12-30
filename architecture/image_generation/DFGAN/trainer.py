@@ -25,7 +25,7 @@ from sentence_transformers import SentenceTransformer
 
 
 class DFGAN(pl.LightningModule):
-    def __init__(self, cfg, train_img_interval=5,  **kwargs):
+    def __init__(self, cfg, train_img_interval=5, **kwargs):
         super().__init__()
         self.cfg = cfg
         self.save_hyperparameters(self.cfg)
@@ -50,7 +50,7 @@ class DFGAN(pl.LightningModule):
         return generator
 
     def init_discriminator(self):
-        discriminator = NetD(self.cfg.TRAIN.NF, self.cfg.TEXT.EMBEDDING_DIM,  self.cfg.TREE.BASE_SIZE)
+        discriminator = NetD(self.cfg.TRAIN.NF, self.cfg.TEXT.EMBEDDING_DIM, self.cfg.TREE.BASE_SIZE)
         return discriminator
 
     def forward(self, z, embeds):
@@ -101,7 +101,7 @@ class DFGAN(pl.LightningModule):
         d_loss_fake = self.discriminator.COND_DNET(fake_features, embeddings)
         d_loss_fake = torch.nn.ReLU()(1.0 + d_loss_fake).mean()
 
-        d_loss = d_loss_real + (d_loss_fake + d_loss_mismatch)/2.0
+        d_loss = d_loss_real + (d_loss_fake + d_loss_mismatch) / 2.0
 
         # Update the discriminator with the regular loss
         opt_d.zero_grad()

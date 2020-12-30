@@ -11,12 +11,49 @@ from tqdm import tqdm
 import random
 import json
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 
-class VQA2(data.Dataset):
+class VQA2DataModule(pl.LightningDataModule):
+
+    def __init__(self, data_dir, batch_size=24, im_size=256, num_workers=4):
+        super().__init__()
+        self.data_dir = data_dir
+        self.im_size = im_size
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+
+    def setup(self, stage=None):
+        image_transform = transforms.Compose([
+            transforms.Resize(int(self.im_size * 76 / 64)),
+            transforms.RandomCrop(self.im_size),
+            transforms.RandomHorizontalFlip()])
+
+        if stage == 'fit' or stage is None:
+            self.vqa2_train = VQA2Dataset(self.data_dir, transform=image_transform, split="train")
+            self.vqa2_val = VQA2Dataset(self.data_dir, transform=image_transform, split="val")
+        if stage == "test" or stage is None:
+            self.vqa2_test = VQA2Dataset(self.data_dir, transform=image_transform, split="test",)
+
+    def train_dataloader(self):
+        return DataLoader(self.vqa2_train, batch_size=self.batch_size, drop_last=True,
+                          shuffle=True, num_workers=self.num_workers, pin_memory=True)
+
+    def val_dataloader(self):
+        return DataLoader(self.vqa2_val, batch_size=self.batch_size, drop_last=True,
+                          num_workers=self.num_workers, pin_memory=True)
+
+    def test_dataloader(self):
+        return DataLoader(self.vqa2_test, batch_size=self.batch_size, drop_last=True,
+                          num_workers=self.num_workers, pin_memory=True)
+
+
+class VQA2Dataset(data.Dataset):
     def __init__(self, data_dir, transform=None, split="train"):
         self.transform = transform
-
+        self.norm = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         annotations_file = None
         if split == "val":
             self.type = "val2014"
@@ -65,11 +102,9 @@ class VQA2(data.Dataset):
         print('QA Data loaded!')
 
     def load_image(self, image_id):
-        norm = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
         file_name = f'COCO_{self.type}_{str(image_id).zfill(12)}.jpg'
-        img = norm(Image.open(os.path.join(self.images_folder, file_name)).convert('RGB'))
+        img = self.norm(Image.open(os.path.join(self.images_folder, file_name)).convert('RGB'))
         if self.transform:
             img = self.transform(img)
 
@@ -95,15 +130,14 @@ class VQA2(data.Dataset):
         return len(self.questions)
 
 
-image_transform = transforms.Compose([
-    transforms.Resize(int(256 * 76 / 64)),
-    transforms.RandomCrop(256),
-    transforms.RandomHorizontalFlip()])
+# image_transform = transforms.Compose([
+#     transforms.Resize(int(256 * 76 / 64)),
+#     transforms.RandomCrop(256),
+#     transforms.RandomHorizontalFlip()])
 
-dataset = VQA2(data_dir="/home/nino/Documents/Datasets/VQA", transform=image_transform, split="val")
-loader = DataLoader(dataset, batch_size=1, drop_last=True,
-                    shuffle=True, num_workers=1, pin_memory=True)
+# dataset = VQA2(data_dir="/home/nino/Documents/Datasets/VQA", transform=image_transform, split="train")
+# loader = DataLoader(dataset, batch_size=24, drop_last=True,
+#                     shuffle=True, num_workers=4, pin_memory=True)
 
-for batch in loader:
-    q, a, i = batch
-    print(q, a)
+# for batch in tqdm(loader):
+#     q, a, i = batch
