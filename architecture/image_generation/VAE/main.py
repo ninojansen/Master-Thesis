@@ -3,7 +3,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))))
 from architecture.datasets.easy_vqa import EasyVQADataModule
-from architecture.image_generation.VAE.trainer import VAE
+from architecture.image_generation.VAE.trainer import DCGAN, VAE
 from architecture.image_generation.VAE.config import cfg, cfg_from_file
 from architecture.datasets.easy_vqa import EasyVQADataModule
 from pytorch_lightning.callbacks import GPUStatsMonitor
@@ -61,7 +61,6 @@ if __name__ == "__main__":
     else:
         num_workers = 4 * args.gpus
 
-    logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, version=args.version)
     # --fast_dev_run // Does 1 batch and 1 epoch for quick
     # --precision 16 // for 16-bit precision
     # --progress_bar_refresh_rate 0  // Disable progress bar
@@ -74,27 +73,50 @@ if __name__ == "__main__":
     datamodule = None
     if cfg.DATASET_NAME == "easy_vqa":
         datamodule = EasyVQADataModule(data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE,
-                                       num_workers=num_workers, val_split=False)
+                                       num_workers=num_workers, im_size=cfg.IM_SIZE, val_split=False)
     elif cfg.DATASET_NAME == "cifar10":
         datamodule = CIFAR10DataModule(data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE,
                                        num_workers=num_workers)
-
-    trainer = pl.Trainer.from_argparse_args(
-        args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=logger, default_root_dir=args.output_dir)
+        datamodule.train_transforms = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        datamodule.test_transforms = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        datamodule.val_transforms = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
     if args.ckpt:
-        model = VAE.load_from_checkpoint(args.ckpt)
+        vae_model = VAE.load_from_checkpoint(args.ckpt)
     else:
-        model = VAE(cfg)
+        vae_logger = TensorBoardLogger(args.output_dir, name=f'{cfg.CONFIG_NAME}_vae', version=args.version)
+        vae_trainer = pl.Trainer.from_argparse_args(
+            args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=vae_logger, default_root_dir=args.output_dir)
+        vae_model = VAE(cfg)
+        vae_trainer.fit(vae_model, datamodule)
 
-    if args.test:
-        # Only test the network
-        print("Test argument specififed; Running testing loop using specified model")
-        datamodule.setup(stage="test")
-        result = trainer.test(model, test_dataloaders=datamodule.test_dataloader())
-        print(result)
-    else:
-        # Train and test the network when finished training
-        trainer.fit(model, datamodule)
-        result = trainer.test(model)
-        print(result)
+    dcgan_logger = TensorBoardLogger(args.output_dir, name=f'{cfg.CONFIG_NAME}_dcgan', version=args.version)
+    dcgan_trainer = pl.Trainer.from_argparse_args(
+        args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=dcgan_logger, default_root_dir=args.output_dir)
+
+    dcgan_model = DCGAN(cfg, vae_model.decoder)
+    dcgan_trainer.fit(dcgan_model, datamodule)
+    result = dcgan_trainer.test(dcgan_model)
+    print(result)
+    # if args.ckpt:
+    #     model = VAE.load_from_checkpoint(args.ckpt)
+    # else:
+    #     model = VAE(cfg)
+
+    # if args.test:
+    #     # Only test the network
+    #     print("Test argument specififed; Running testing loop using specified model")
+    #     datamodule.setup(stage="test")
+    #     result = trainer.test(model, test_dataloaders=datamodule.test_dataloader())
+    #     print(result)
+    # else:
+    #     # Train and test the network when finished training
+    #     trainer.fit(model, datamodule)
+    #     result = trainer.test(model)
+    #     print(result)

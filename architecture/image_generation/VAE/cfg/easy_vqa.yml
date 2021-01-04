@@ -3,7 +3,7 @@ CONFIG_NAME: "easy_vqa"
 DATASET_NAME: "easy_vqa"
 DATA_DIR: "/home/nino/Documents/Datasets/EasyVQA/data"
 
-IM_SIZE: 64
+IM_SIZE: 32
 
 MODEL:
   NF: 16
