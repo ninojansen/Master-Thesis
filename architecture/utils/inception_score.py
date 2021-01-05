@@ -58,7 +58,7 @@ class INCEPTION_V3(nn.Module):
         self.model.load_state_dict(state_dict)
         for param in self.model.parameters():
             param.requires_grad = False
-        print('Load pretrained model from ', url)
+     #   print('Load pretrained model from ', url)
         # print(next(self.model.parameters()).data)
         # print(self.model)
 

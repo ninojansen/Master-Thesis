@@ -43,7 +43,7 @@ class Encoder(nn.Module):
             x = torch.cat((x, c), 1)
         if self.disc:
             pred = self.fc11(x)
-            return F.sigmoid(pred)
+            return torch.sigmoid(pred)
         else:
             mu = self.fc11(x)
             mu = F.relu(mu)

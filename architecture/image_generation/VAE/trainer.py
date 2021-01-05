@@ -79,10 +79,15 @@ class VAE(pl.LightningModule):
 
 class DCGAN(pl.LightningModule):
 
-    def __init__(self, cfg, pretrained_decoder):
+    def __init__(self, cfg, pretrained_decoder=None):
         super().__init__()
         self.cfg = cfg
-        self.generator = pretrained_decoder
+        if pretrained_decoder:
+            self.generator = pretrained_decoder
+        else:
+            self.generator = Decoder(cfg.MODEL.NF, cfg.IM_SIZE, cfg.MODEL.Z_DIM,
+                                     conditional=True, ef_dim=cfg.MODEL.EF_DIM)
+
         self.discriminator = Encoder(cfg.MODEL.NF, cfg.IM_SIZE, cfg.MODEL.Z_DIM,
                                      conditional=True, ef_dim=cfg.MODEL.EF_DIM, disc=True)
 

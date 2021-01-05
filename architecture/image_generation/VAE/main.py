@@ -77,15 +77,17 @@ if __name__ == "__main__":
     elif cfg.DATASET_NAME == "cifar10":
         datamodule = CIFAR10DataModule(data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE,
                                        num_workers=num_workers)
-        datamodule.train_transforms = transforms.Compose([
+
+        transform = transforms.Compose([
             transforms.ToTensor(),
+            transforms.Resize(int(cfg.IM_SIZE * 76 / 64)),
+            transforms.RandomCrop(cfg.IM_SIZE),
+            transforms.RandomHorizontalFlip(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-        datamodule.test_transforms = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-        datamodule.val_transforms = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+        datamodule.train_transforms = transform
+        datamodule.test_transforms = transform
+        datamodule.val_transforms = transform
 
     if args.ckpt:
         vae_model = VAE.load_from_checkpoint(args.ckpt)
@@ -96,14 +98,27 @@ if __name__ == "__main__":
         vae_model = VAE(cfg)
         vae_trainer.fit(vae_model, datamodule)
 
-    dcgan_logger = TensorBoardLogger(args.output_dir, name=f'{cfg.CONFIG_NAME}_dcgan', version=args.version)
+    pre_dcgan_logger = TensorBoardLogger(args.output_dir, name=f'{cfg.CONFIG_NAME}_dcgan', version=args.version)
+    pre_dcgan_trainer = pl.Trainer.from_argparse_args(
+        args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=pre_dcgan_logger, default_root_dir=args.output_dir)
+
+    pre_dcgan_model = DCGAN(cfg, vae_model.decoder)
+    pre_dcgan_trainer.fit(pre_dcgan_model, datamodule)
+    pretrained_result = pre_dcgan_trainer.test(pre_dcgan_model)
+
+    dcgan_logger = TensorBoardLogger(args.output_dir, name=f'{cfg.CONFIG_NAME}_dcgan')
     dcgan_trainer = pl.Trainer.from_argparse_args(
         args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=dcgan_logger, default_root_dir=args.output_dir)
-
-    dcgan_model = DCGAN(cfg, vae_model.decoder)
+    dcgan_model = DCGAN(cfg)
     dcgan_trainer.fit(dcgan_model, datamodule)
     result = dcgan_trainer.test(dcgan_model)
+
+    print("Pretrained result:")
+    print(pretrained_result)
+
+    print("Result:")
     print(result)
+
     # if args.ckpt:
     #     model = VAE.load_from_checkpoint(args.ckpt)
     # else:
