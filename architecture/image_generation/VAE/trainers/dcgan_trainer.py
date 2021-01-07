@@ -9,7 +9,7 @@ from torch import nn
 import torch
 import torchvision
 import os
-from models import Encoder, Decoder, reparameterize
+from architecture.image_generation.VAE.models.dcgan_model import *
 import time
 from architecture.utils.inception_score import InceptionScore
 

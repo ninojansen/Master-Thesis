@@ -1,0 +1,22 @@
+CONFIG_NAME: "cifar10_dfgan"
+
+DATASET_NAME: "cifar10"
+DATA_DIR: "/home/nino/Documents/Datasets/cifar10/"
+
+IM_SIZE: 32
+
+MODEL:
+  NF: 16
+  Z_DIM: 100
+  EF_DIM: 10
+
+TRAIN:
+  BATCH_SIZE: 24 #default 24
+  MAX_EPOCH: 300
+  G_LR: 0.0001
+  D_LR: 0.0004
+  VAE_LR: 0.0002
+  CHECKPOINT: ""
+
+TEST:
+  CHECKPOINT: ""
