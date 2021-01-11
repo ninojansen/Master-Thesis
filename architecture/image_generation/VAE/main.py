@@ -3,6 +3,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))))
 from architecture.datasets.easy_vqa import EasyVQADataModule
+from architecture.datasets.cub200 import CUB200DataModule
 from architecture.image_generation.VAE.config import cfg, cfg_from_file
 from pytorch_lightning.loggers import TensorBoardLogger
 import torchvision.transforms as transforms
@@ -27,6 +28,7 @@ def parse_args():
     parser.add_argument('--ckpt', dest='ckpt', type=str, default=None)
     parser.add_argument('--type', dest='type', type=str, default="DFGAN")
     parser.add_argument('--pretrain', dest='pretrain', action="store_true", default=False)
+    parser.add_argument('--only_vae', dest='only_vae', action="store_true", default=False)
     parser.add_argument('--test', dest='test', action="store_true", default=False)
     parser = pl.Trainer.add_argparse_args(parser)
     parser.set_defaults(gpus=-1)
@@ -85,6 +87,9 @@ if __name__ == "__main__":
         datamodule.train_transforms = transform
         datamodule.test_transforms = transform
         datamodule.val_transforms = transform
+    elif cfg.DATASET_NAME == "CUB200":
+        datamodule = CUB200DataModule(data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE,
+                                      num_workers=num_workers, im_size=cfg.IM_SIZE)
 
     # Initialize loggers
     version = 1
@@ -94,12 +99,10 @@ if __name__ == "__main__":
     vae_trainer, pretrained_trainer, full_trainer = None, None, None
     vae_logger, pretrained_logger, full_logger = None, None, None
 
-    full_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, version=f"full_v{version:03d}")
-    full_trainer = pl.Trainer.from_argparse_args(
-        args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=full_logger, automatic_optimization=False,
-        default_root_dir=args.output_dir)
+    vae_model, pretrained_model, full_model = None, None, None
+    pretrained_result = None
 
-    if args.pretrain:
+    if args.pretrain or args.only_vae:
         vae_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, version=f"vae_v{version:03d}")
         pretrained_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME,
                                               version=f"pretrained_v{version:03d}")
@@ -110,40 +113,48 @@ if __name__ == "__main__":
             args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=pretrained_logger, automatic_optimization=False,
             default_root_dir=args.output_dir)
 
-    vae_model, pretrained_model, full_model = None, None, None
-    pretrained_result = None
-
-    if args.pretrain:
+    full_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, version=f"full_v{version:03d}")
+    full_trainer = pl.Trainer.from_argparse_args(
+        args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=full_logger, automatic_optimization=False,
+        default_root_dir=args.output_dir)
+    if args.pretrain or args.only_vae:
         if args.type == "DFGAN":
             vae_model = DFGAN_VAE(cfg)
         elif args.type == "DCGAN":
             vae_model = VAE(cfg)
 
-        print(f"==============Training VAE model for pretraining==============")
-        vae_trainer.fit(vae_model, datamodule)
+        if cfg.TRAIN.VAE_CHECKPOINT:
+            print(f"==============Using VAE model from checkpoint==============")
+            vae_model.load_from_checkpoint(cfg.TRAIN.VAE_CHECKPOINT)
+        else:
+            print(f"==============Training VAE model for pretraining==============")
+            vae_trainer.fit(vae_model, datamodule)
+
+        if not args.only_vae:
+            if args.type == "DFGAN":
+                pretrained_model = DFGAN(cfg, vae_model.decoder)
+            elif args.type == "DCGAN":
+                pretrained_model = DCGAN(cfg, vae_model.decoder)
+            print(f"==============Training {cfg.CONFIG_NAME} model with pretraining==============")
+            pretrained_trainer.fit(pretrained_model, datamodule)
+            pretrained_result = pretrained_trainer.test(pretrained_model)
+
+    if not args.only_vae:
         if args.type == "DFGAN":
-            pretrained_model = DFGAN(cfg, vae_model.decoder)
+            full_model = DFGAN(cfg)
         elif args.type == "DCGAN":
-            pretrained_model = DCGAN(cfg, vae_model.decoder)
-        print(f"==============Training {cfg.CONFIG_NAME} model with pretraining==============")
-        pretrained_trainer.fit(pretrained_model, datamodule)
-        pretrained_result = pretrained_trainer.test(pretrained_model)
+            full_model = DCGAN(cfg)
 
-    if args.type == "DFGAN":
-        full_model = DFGAN(cfg)
-    elif args.type == "DCGAN":
-        full_model = DCGAN(cfg)
+        print(f"==============Training {cfg.CONFIG_NAME} model without pretraining==============")
+        full_trainer.fit(full_model, datamodule)
+        full_result = full_trainer.test(full_model)
 
-    print(f"==============Training {cfg.CONFIG_NAME} model without pretraining==============")
-    full_trainer.fit(full_model, datamodule)
-    full_result = full_trainer.test(full_model)
+        if pretrained_result:
+            print("Pretrained result:")
+            print(pretrained_result)
 
-    if pretrained_result:
-        print("Pretrained result:")
-        print(pretrained_result)
-
-    print("Non-Pretrained Result:")
-    print(full_result)
+        print("Non-Pretrained Result:")
+        print(full_result)
 
     # if args.ckpt:
     #     vae_model = VAE.load_from_checkpoint(args.ckpt)

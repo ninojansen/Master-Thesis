@@ -27,7 +27,6 @@ class DFGAN_VAE(pl.LightningModule):
         self.start = time.perf_counter()
 
         self.eval_y = None
-        self.eval_size = 50
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
@@ -46,7 +45,15 @@ class DFGAN_VAE(pl.LightningModule):
             images, target = batch
             target = F.one_hot(target, num_classes=10).float()
             if self.eval_y == None:
+                self.eval_size = 50
                 self.eval_y = F.one_hot(torch.randint(0, 10, (self.eval_size,))).type_as(target)
+            return images, target
+        elif dataset_name == "CUB200":
+            images, target, captions = batch
+
+            if self.eval_y == None:
+                self.eval_y = target
+                self.eval_size = target.size(0)
             return images, target
 
     def training_step(self, batch, batch_idx):
@@ -64,7 +71,7 @@ class DFGAN_VAE(pl.LightningModule):
         kl_loss = self.kl_loss(mu, logvar)
 
         loss = recon_loss + kl_loss
-        self.log('train_loss', loss, on_epoch=True)
+        self.log('loss', loss)
         return loss
 
     def on_epoch_end(self):
@@ -74,7 +81,7 @@ class DFGAN_VAE(pl.LightningModule):
             f"\nEpoch {self.current_epoch} finished in {round(elapsed_time, 2)}s")
 
         if self.current_epoch % self.trainer.check_val_every_n_epoch == 0:
-            noise = torch.randn((self.eval_size, self.cfg.MODEL.Z_DIM)).cuda()
+            noise = torch.randn((self.eval_size, self.cfg.MODEL.Z_DIM)).type_as(self.eval_y)
             recon_x = self.forward(noise, self.eval_y)
             grid = torchvision.utils.make_grid(recon_x, normalize=True)
             self.logger.experiment.add_image(f"Epoch {self.current_epoch}", grid, global_step=self.current_epoch)
@@ -99,7 +106,6 @@ class DFGAN(pl.LightningModule):
         self.start = time.perf_counter()
         self.inception = InceptionScore()
         self.eval_y = None
-        self.eval_size = 50
 
     def forward(self, x, y=None):
         # in lightning, forward defines the prediction/inference actions
@@ -117,8 +123,16 @@ class DFGAN(pl.LightningModule):
 
             raw_str = [cifar10_label_names[idx] for idx in target_np]
             if self.eval_y == None:
+                self.eval_size = 50
                 self.eval_y = F.one_hot(torch.randint(0, 10, (self.eval_size,))).type_as(target)
             return images, target, raw_str
+        elif dataset_name == "CUB200":
+            images, target, captions = batch
+
+            if self.eval_y == None:
+                self.eval_y = target
+                self.eval_size = target.size(0)
+            return images, target, captions
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         (opt_g, opt_d) = self.optimizers()
@@ -223,7 +237,7 @@ class DFGAN(pl.LightningModule):
             f"\nEpoch {self.current_epoch} finished in {round(elapsed_time, 2)}s")
 
         if self.current_epoch % self.trainer.check_val_every_n_epoch == 0:
-            noise = torch.randn((self.eval_size, self.cfg.MODEL.Z_DIM)).cuda()
+            noise = torch.randn((self.eval_size, self.cfg.MODEL.Z_DIM)).type_as(self.eval_y)
             recon_x = self.forward(noise, self.eval_y)
             grid = torchvision.utils.make_grid(recon_x, normalize=True)
             self.logger.experiment.add_image(f"Epoch {self.current_epoch}", grid, global_step=self.current_epoch)

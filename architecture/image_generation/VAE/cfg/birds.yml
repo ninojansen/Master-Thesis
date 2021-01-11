@@ -1,14 +1,14 @@
-CONFIG_NAME: "cifar10_dfgan"
+CONFIG_NAME: "CUB200"
 
-DATASET_NAME: "cifar10"
-DATA_DIR: "/home/nino/Documents/Datasets/cifar10/"
+DATASET_NAME: "CUB200"
+DATA_DIR: "/home/nino/Documents/Datasets/CUB200/"
 
-IM_SIZE: 32
+IM_SIZE: 64
 
 MODEL:
   NF: 16
   Z_DIM: 100
-  EF_DIM: 10
+  EF_DIM: 768
 
 TRAIN:
   BATCH_SIZE: 24 #default 24
