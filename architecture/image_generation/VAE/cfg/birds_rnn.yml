@@ -8,8 +8,8 @@ IM_SIZE: 64
 MODEL:
   NF: 32
   Z_DIM: 100
-  EF_DIM: 768
-  EF_TYPE: "BERT"
+  EF_DIM: 256
+  EF_TYPE: "RNN"
 
 TRAIN:
   BATCH_SIZE: 24 #default 24

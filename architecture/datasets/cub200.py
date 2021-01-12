@@ -2,7 +2,8 @@ import os
 import pickle
 import sys
 from collections import defaultdict
-
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
@@ -18,17 +19,18 @@ import random
 import json
 from sentence_transformers import SentenceTransformer
 import math
-
+from architecture.embeddings.rnn import RNN_ENCODER
 # from models import RNN_ENCODER
 
 
 class CUB200DataModule(pl.LightningDataModule):
 
-    def __init__(self, data_dir, batch_size=24, im_size=256, num_workers=4):
+    def __init__(self, data_dir, batch_size=24, embedding_type="RNN", im_size=256, num_workers=4):
         super().__init__()
         self.data_dir = data_dir
         self.imsize = im_size
         self.batch_size = batch_size
+        self.embedding_type = embedding_type
         self.image_transform = transforms.Compose([
             transforms.Resize(int(self.imsize * 76 / 64)),
             transforms.RandomCrop(self.imsize),
@@ -45,10 +47,12 @@ class CUB200DataModule(pl.LightningDataModule):
     #     MNIST(self.data_dir, train=False, download=True)
 
     def setup(self, stage=None):
-        self.cub200_test = CUB200Dataset(self.data_dir, transform=self.image_transform, split="test")
+        self.cub200_test = CUB200Dataset(self.data_dir, embedding_type=self.embedding_type,
+                                         transform=self.image_transform, split="test")
         # Assign train/val datasets for use in dataloaders
         if stage == 'fit' or stage is None:
-            self.cub200_train = CUB200Dataset(self.data_dir, transform=self.image_transform, split="test")
+            self.cub200_train = CUB200Dataset(self.data_dir, embedding_type=self.embedding_type,
+                                              transform=self.image_transform, split="test")
 
     def train_dataloader(self):
         return DataLoader(self.cub200_train, batch_size=self.batch_size, drop_last=True,
@@ -64,7 +68,7 @@ class CUB200DataModule(pl.LightningDataModule):
 
 
 class CUB200Dataset(data.Dataset):
-    def __init__(self, data_dir, transform=None, split='train', preprocess=False):
+    def __init__(self, data_dir, transform=None, split='train', embedding_type="RNN", preprocess=False):
         self.transform = transform
         self.norm = transforms.Compose([
             transforms.ToTensor(),
@@ -72,10 +76,12 @@ class CUB200Dataset(data.Dataset):
 
         self.data = []
         self.data_dir = data_dir
+        self.embedding_type = embedding_type
+        self.captions_per_image = 10
         if preprocess:
-            self.preprocess_images()
-            self.preprocesses_text()
-        self.filenames, self.captions, self.embeddings = self.load_data(split)
+            self.ixtoword, self.wordtoix, self.n_words = self.build_dictionary()
+        else:
+            self.filenames, self.captions, self.embeddings = self.load_data(split)
 
     def load_data(self, split):
         filenames = self.load_filenames(self.data_dir, split)
@@ -84,8 +90,70 @@ class CUB200Dataset(data.Dataset):
         for filename in filenames:
             captions[filename] = self.load_captions(os.path.join(
                 self.data_dir, "text", f"{filename}.txt"))
-            embeddings[filename] = np.load(os.path.join(self.data_dir, "text", f"{filename}_distilroberta.npy"))
+            if self.embedding_type == "RNN":
+                embeddings[filename] = np.load(os.path.join(self.data_dir, "text", f"{filename}_rnn.npy"))
+            elif self.embedding_type == "BERT":
+                embeddings[filename] = np.load(os.path.join(self.data_dir, "text", f"{filename}_distilroberta.npy"))
         return filenames, captions, embeddings
+
+    def build_dictionary(self):
+        word_counts = defaultdict(float)
+        train_names = self.load_filenames(self.data_dir, 'train')
+        test_names = self.load_filenames(self.data_dir, 'test')
+        filenames = train_names + test_names
+
+        captions = []
+        for filename in filenames:
+            captions += self.load_captions(os.path.join(
+                self.data_dir, "text", f"{filename}.txt"), join=False)
+        for sent in captions:
+            for word in sent:
+                word_counts[word] += 1
+
+        vocab = [w for w in word_counts if word_counts[w] >= 0]
+
+        ixtoword = {}
+        ixtoword[0] = '<end>'
+        wordtoix = {}
+        wordtoix['<end>'] = 0
+        ix = 1
+        for w in vocab:
+            wordtoix[w] = ix
+            ixtoword[ix] = w
+            ix += 1
+
+        return [ixtoword, wordtoix, len(ixtoword)]
+
+    def captions_toix(self, captions):
+        # a list of indices for a sentence
+        words_num = 18
+        res_captions = []
+        len_captions = []
+        for cap in captions:
+            rev = []
+            for w in cap:
+                if w in self.wordtoix:
+                    rev.append(self.wordtoix[w])
+            # rev.append(0)  # do not need '<end>' token
+            sent_caption = np.asarray(rev).astype('int64')
+            if (sent_caption == 0).sum() > 0:
+                print('ERROR: do not need END (0) token', sent_caption)
+            num_words = len(sent_caption)
+            # pad with 0s (i.e., '<end>')
+            x = np.zeros((words_num), dtype='int64')
+            x_len = num_words
+            if num_words <= words_num:
+                x[:num_words] = sent_caption
+            else:
+                ix = list(np.arange(num_words))  # 1, 2, 3,..., maxNum
+                np.random.shuffle(ix)
+                ix = ix[:words_num]
+                ix = np.sort(ix)
+                x[:] = sent_caption[ix]
+                x_len = words_num
+            res_captions.append(x)
+            len_captions.append(x_len)
+        return np.stack(res_captions), np.stack(len_captions)
 
     def preprocess_images(self):
         bbox_dict = self.load_bbox()
@@ -114,17 +182,27 @@ class CUB200Dataset(data.Dataset):
 
             img.save(os.path.join(self.data_dir, "processed_images", filename + ".jpg"))
 
-    def preprocesses_text(self):
+    def preprocesses_text(self, encoder, type="BERT"):
         train_names = self.load_filenames(self.data_dir, 'train')
         test_names = self.load_filenames(self.data_dir, 'test')
         filenames = train_names + test_names
-        text_encoder = SentenceTransformer('paraphrase-distilroberta-base-v1')
+
      #   text_encoder = SentenceTransformer('distilbert-base-nli-stsb-mean-tokens')
-        print("Generating embeddings")
+        print(f"Generating {type} embeddings")
         for filename in tqdm(filenames):
-            captions = self.load_captions(os.path.join(self.data_dir, "text", filename + ".txt"))
-            embeddings = text_encoder.encode(captions, convert_to_numpy=True)
-            np.save(os.path.join(self.data_dir, "text", f"{filename}_distilroberta.npy"), embeddings)
+            if type == "BERT":
+                captions = self.load_captions(os.path.join(self.data_dir, "text", filename + ".txt"))
+                embeddings = encoder.encode(captions, convert_to_numpy=True)
+                np.save(os.path.join(self.data_dir, "text", f"{filename}_distilroberta.npy"), embeddings)
+            elif type == "RNN":
+                captions = self.load_captions(os.path.join(self.data_dir, "text", filename + ".txt"), join=False)
+                hidden = text_encoder.init_hidden(len(captions))
+                captions, cap_lens = self.captions_toix(captions)
+                captions = torch.from_numpy(captions).cuda()
+                with torch.no_grad():
+                    _, embeddings = text_encoder(captions, cap_lens, hidden)
+                    embeddings = embeddings.detach().cpu()
+                    np.save(os.path.join(self.data_dir, "text", f"{filename}_rnn.npy"), embeddings)
 
     def load_bbox(self):
         data_dir = self.data_dir
@@ -149,11 +227,11 @@ class CUB200Dataset(data.Dataset):
         #
         return filename_bbox
 
-    def load_captions(self, filename):
+    def load_captions(self, filename, join=True):
+        all_captions = []
         with open(filename, "r") as f:
             captions = f.read().split('\n')
-            captions = [x for x in captions if len(x) > 0]
-            captions = [x.replace("\ufffd\ufffd", " ") for x in captions]
+            cnt = 0
             for cap in captions:
                 if len(cap) == 0:
                     continue
@@ -166,7 +244,24 @@ class CUB200Dataset(data.Dataset):
                 if len(tokens) == 0:
                     print('cap', cap)
                     continue
-        return captions
+
+                tokens_new = []
+                for t in tokens:
+                    t = t.encode('ascii', 'ignore').decode('ascii')
+                    if len(t) > 0:
+                        tokens_new.append(t)
+                all_captions.append(tokens_new)
+                cnt += 1
+                if cnt == self.captions_per_image:
+                    break
+
+            if cnt < self.captions_per_image:
+                print('ERROR: the captions for %s less than %d'
+                      % (filename, cnt))
+        if join:
+            return [" ".join(x) for x in all_captions]
+        else:
+            return all_captions
 
     def load_filenames(self, data_dir, split):
         filepath = '%s/%s/filenames.pickle' % (data_dir, split)
@@ -202,4 +297,22 @@ class CUB200Dataset(data.Dataset):
 
 
 if __name__ == "__main__":
-    dataset = CUB200Dataset("/home/nino/Documents/Datasets/Birds", preprocess=True)
+    dataset = CUB200Dataset("/home/nino/Documents/Datasets/CUB200", preprocess=True)
+
+    # Processing image bounding boxes
+#    dataset.preprocess_images()
+
+    # BERT embeddings
+    text_encoder = SentenceTransformer('paraphrase-distilroberta-base-v1')
+    dataset.preprocesses_text(text_encoder, type="BERT")
+
+    # RNN embeddings
+    text_encoder = RNN_ENCODER(dataset.n_words, nhidden=256)
+    state_dict = torch.load("/home/nino/Documents/Datasets/CUB200/encoders/text_encoder200.pth",
+                            map_location=lambda storage, loc: storage)
+    text_encoder.load_state_dict(state_dict)
+    text_encoder.cuda()
+    for p in text_encoder.parameters():
+        p.requires_grad = False
+    text_encoder.eval()
+    dataset.preprocesses_text(text_encoder, type="RNN")

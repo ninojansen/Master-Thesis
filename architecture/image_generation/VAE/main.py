@@ -15,20 +15,19 @@ import argparse
 from pl_bolts.datamodules import CIFAR10DataModule
 from architecture.image_generation.VAE.trainers.dcgan_trainer import *
 from architecture.image_generation.VAE.trainers.dfgan_trainer import *
+from datetime import datetime
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a DAMSM network')
     parser.add_argument('--cfg', dest='cfg_file',
                         help='optional config file',
-                        default='cfg/cifar10_dfgan.yml', type=str)
-    parser.add_argument('--datadir', dest='data_dir', type=str, default='')
+                        default='cfg/birds.yml', type=str)
     parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
     parser.add_argument('--ckpt', dest='ckpt', type=str, default=None)
-    parser.add_argument('--type', dest='type', type=str, default="DFGAN")
-    parser.add_argument('--pretrain', dest='pretrain', action="store_true", default=False)
-    parser.add_argument('--only_vae', dest='only_vae', action="store_true", default=False)
+    parser.add_argument('--gan', dest='gan', type=str, default="DFGAN")
+    parser.add_argument('--type', dest='type', type=str, default="all")
     parser.add_argument('--test', dest='test', action="store_true", default=False)
     parser = pl.Trainer.add_argparse_args(parser)
     parser.set_defaults(gpus=-1)
@@ -42,9 +41,6 @@ if __name__ == "__main__":
     args = parse_args()
     if args.cfg_file is not None:
         cfg_from_file(args.cfg_file)
-
-    if args.data_dir != '':
-        cfg.DATA_DIR = args.data_dir
 
     if args.max_epochs:
         cfg.TRAIN.MAX_EPOCH = args.max_epochs
@@ -88,39 +84,26 @@ if __name__ == "__main__":
         datamodule.test_transforms = transform
         datamodule.val_transforms = transform
     elif cfg.DATASET_NAME == "CUB200":
-        datamodule = CUB200DataModule(data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE,
-                                      num_workers=num_workers, im_size=cfg.IM_SIZE)
+        datamodule = CUB200DataModule(
+            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers,
+            embedding_type=cfg.MODEL.EF_TYPE, im_size=cfg.IM_SIZE)
 
     # Initialize loggers
-    version = 1
-    if os.path.isdir(os.path.join(args.output_dir, cfg.CONFIG_NAME)):
-        version = len(os.listdir(os.path.join(args.output_dir, cfg.CONFIG_NAME))) + 1
+    # version = 1
+    # if os.path.isdir(os.path.join(args.output_dir, cfg.CONFIG_NAME)):
+    #     version = len(os.listdir(os.path.join(args.output_dir, cfg.CONFIG_NAME))) + 1
 
-    vae_trainer, pretrained_trainer, full_trainer = None, None, None
-    vae_logger, pretrained_logger, full_logger = None, None, None
-
-    vae_model, pretrained_model, full_model = None, None, None
-    pretrained_result = None
-
-    if args.pretrain or args.only_vae:
-        vae_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, version=f"vae_v{version:03d}")
-        pretrained_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME,
-                                              version=f"pretrained_v{version:03d}")
-        vae_trainer = pl.Trainer.from_argparse_args(
+    version = datetime.now().strftime("%d/%m_%H:%M:%S")
+    if args.type == "all" or args.type == "vae" or args.type == "pretrain":
+        # VAE training
+        vae_logger = vae_logger = TensorBoardLogger(
+            args.output_dir, name=cfg.CONFIG_NAME, version=f"vae_{version}")
+        vae_trainer = vae_trainer = pl.Trainer.from_argparse_args(
             args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=vae_logger, default_root_dir=args.output_dir)
 
-        pretrained_trainer = pl.Trainer.from_argparse_args(
-            args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=pretrained_logger, automatic_optimization=False,
-            default_root_dir=args.output_dir)
-
-    full_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, version=f"full_v{version:03d}")
-    full_trainer = pl.Trainer.from_argparse_args(
-        args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=full_logger, automatic_optimization=False,
-        default_root_dir=args.output_dir)
-    if args.pretrain or args.only_vae:
-        if args.type == "DFGAN":
+        if args.gan == "DFGAN":
             vae_model = DFGAN_VAE(cfg)
-        elif args.type == "DCGAN":
+        else:
             vae_model = VAE(cfg)
 
         if cfg.TRAIN.VAE_CHECKPOINT:
@@ -130,31 +113,35 @@ if __name__ == "__main__":
             print(f"==============Training VAE model for pretraining==============")
             vae_trainer.fit(vae_model, datamodule)
 
-        if not args.only_vae:
-            if args.type == "DFGAN":
+        if args.type == "pretrain":
+            pretrained_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME,
+                                                  version=f"pretrained_{version}")
+            pretrained_trainer = pl.Trainer.from_argparse_args(
+                args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=pretrained_logger, automatic_optimization=False,
+                default_root_dir=args.output_dir)
+            if args.gan == "DFGAN":
                 pretrained_model = DFGAN(cfg, vae_model.decoder)
-            elif args.type == "DCGAN":
+            else:
                 pretrained_model = DCGAN(cfg, vae_model.decoder)
             print(f"==============Training {cfg.CONFIG_NAME} model with pretraining==============")
             pretrained_trainer.fit(pretrained_model, datamodule)
             pretrained_result = pretrained_trainer.test(pretrained_model)
+            print("Pretrained result:")
+            print(pretrained_result)
 
-    if not args.only_vae:
-        if args.type == "DFGAN":
+    if args.type == "all" or args.type == "no_pretrain":
+        full_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, version=f"non_pretrained_{version}")
+        full_trainer = pl.Trainer.from_argparse_args(
+            args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=full_logger, automatic_optimization=False,
+            default_root_dir=args.output_dir)
+
+        if args.gan == "DFGAN":
             full_model = DFGAN(cfg)
-        elif args.type == "DCGAN":
+        else:
             full_model = DCGAN(cfg)
-
         print(f"==============Training {cfg.CONFIG_NAME} model without pretraining==============")
         full_trainer.fit(full_model, datamodule)
         full_result = full_trainer.test(full_model)
 
-        if pretrained_result:
-            print("Pretrained result:")
-            print(pretrained_result)
-
         print("Non-Pretrained Result:")
         print(full_result)
-
-    # if args.ckpt:
-    #     vae_model = VAE.load_from_checkpoint(args.ckpt)
