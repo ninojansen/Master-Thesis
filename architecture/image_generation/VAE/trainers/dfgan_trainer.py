@@ -71,7 +71,7 @@ class DFGAN_VAE(pl.LightningModule):
         kl_loss = self.kl_loss(mu, logvar)
 
         loss = recon_loss + kl_loss
-        self.log('loss', loss)
+        self.log('vae_loss', loss)
         return loss
 
     def on_epoch_end(self):
@@ -148,10 +148,12 @@ class DFGAN(pl.LightningModule):
         # Prediction on the real data
         real_pred = self.discriminator(x, y)
 
-        d_loss_real = F.binary_cross_entropy_with_logits(real_pred, real)
+        d_loss_real = torch.nn.ReLU()(1.0 - real_pred).mean()
+     #   d_loss_real = F.binary_cross_entropy_with_logits(real_pred, real)
         # Prediction on the mismatched/wrong labeled data
         wrong_pred = self.discriminator(x, y.roll(1))
-        d_loss_wrong = F.binary_cross_entropy_with_logits(wrong_pred, fake)
+        d_loss_wrong = torch.nn.ReLU()(1.0 + wrong_pred).mean()
+       # d_loss_wrong = F.binary_cross_entropy_with_logits(wrong_pred, fake)
         # Forward pass
         noise = torch.randn(batch_size, 100).type_as(x)
         fake_x = self.generator(noise, y)
@@ -159,7 +161,8 @@ class DFGAN(pl.LightningModule):
         # Prediction on the generated images
         fake_pred = self.discriminator(fake_x.detach(), y)
 
-        d_loss_fake = F.binary_cross_entropy_with_logits(fake_pred, fake)
+        d_loss_fake = torch.nn.ReLU()(1.0 + fake_pred).mean()
+        #d_loss_fake = F.binary_cross_entropy_with_logits(fake_pred, fake)
 
         d_loss = d_loss_real + (d_loss_fake + d_loss_wrong) / 2.0
         opt_d.zero_grad()
@@ -192,7 +195,8 @@ class DFGAN(pl.LightningModule):
 
         # 3. Generator loss
         fake_pred = self.discriminator(fake_x, y)
-        g_loss = F.binary_cross_entropy_with_logits(fake_pred, real)
+        g_loss = - fake_pred.mean()
+    #    g_loss = F.binary_cross_entropy_with_logits(fake_pred, real)
         opt_g.zero_grad()
         opt_d.zero_grad()
         self.manual_backward(g_loss, opt_g)

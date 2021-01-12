@@ -6,7 +6,7 @@ DATA_DIR: "/home/nino/Documents/Datasets/CUB200/"
 IM_SIZE: 64
 
 MODEL:
-  NF: 16
+  NF: 32
   Z_DIM: 100
   EF_DIM: 768
 

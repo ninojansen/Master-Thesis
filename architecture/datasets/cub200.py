@@ -124,7 +124,6 @@ class CUB200Dataset(data.Dataset):
         for filename in tqdm(filenames):
             captions = self.load_captions(os.path.join(self.data_dir, "text", filename + ".txt"))
             embeddings = text_encoder.encode(captions, convert_to_numpy=True)
-            os.remove(os.path.join(self.data_dir, "text", f"{filename}_distilroberta.npz"))
             np.save(os.path.join(self.data_dir, "text", f"{filename}_distilroberta.npy"), embeddings)
 
     def load_bbox(self):
