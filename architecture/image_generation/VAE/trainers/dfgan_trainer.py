@@ -88,7 +88,7 @@ class DFGAN_VAE(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(),
-                                     lr=self.cfg.TRAIN.VAE_LR, betas=(0.5, 0.999))
+                                     lr=self.cfg.TRAIN.VAE_LR, betas=(0, 0.999))
         return optimizer
 
 
@@ -103,6 +103,7 @@ class DFGAN(pl.LightningModule):
             self.generator = NetG(cfg.MODEL.NF, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
         self.discriminator = NetD(cfg.MODEL.NF, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=True)
 
+        self.opt_g, self.opt_d = self.configure_optimizers()
         self.start = time.perf_counter()
         self.inception = InceptionScore()
         self.eval_y = None
@@ -135,13 +136,10 @@ class DFGAN(pl.LightningModule):
             return images, target, captions
 
     def training_step(self, batch, batch_idx, optimizer_idx):
-        (opt_g, opt_d) = self.optimizers()
+      #  (opt_g, opt_d) = self.optimizers()
         x, y, raw_str = self.process_data(batch, self.cfg.DATASET_NAME)
 
         batch_size = x.size(0)
-
-        real = torch.ones(batch_size, 1).type_as(x)
-        fake = torch.zeros(batch_size, 1).type_as(x)
 
         # 1. Discriminator loss
 
@@ -165,11 +163,11 @@ class DFGAN(pl.LightningModule):
         #d_loss_fake = F.binary_cross_entropy_with_logits(fake_pred, fake)
 
         d_loss = d_loss_real + (d_loss_fake + d_loss_wrong) / 2.0
-        opt_d.zero_grad()
-        opt_g.zero_grad()
-        self.manual_backward(d_loss, opt_d)
-        self.manual_optimizer_step(opt_d)
-
+        self.opt_d.zero_grad()
+        self.opt_g.zero_grad()
+        self.manual_backward(d_loss, self.opt_d)
+       # self.manual_optimizer_step(self.opt_d)
+        self.opt_d.step()
         self.log("d_loss", d_loss, prog_bar=True)
 
         # 2. Matching aware gradient penalty on the discriminator
@@ -187,20 +185,22 @@ class DFGAN(pl.LightningModule):
         grad = torch.cat((grad0, grad1), dim=1)
         grad_l2norm = torch.sqrt(torch.sum(grad ** 2, dim=1))
         d_loss_gp = torch.mean((grad_l2norm) ** 6) * 2
-        opt_d.zero_grad()
-        opt_g.zero_grad()
-        self.manual_backward(d_loss_gp, opt_d)
-        self.manual_optimizer_step(opt_d)
+        self.opt_d.zero_grad()
+        self.opt_g.zero_grad()
+        self.manual_backward(d_loss_gp, self.opt_d)
+       # self.manual_optimizer_step(self.opt_d)
+        self.opt_d.step()
         self.log("d_loss_gp", d_loss_gp)
 
         # 3. Generator loss
         fake_pred = self.discriminator(fake_x, y)
         g_loss = - fake_pred.mean()
     #    g_loss = F.binary_cross_entropy_with_logits(fake_pred, real)
-        opt_g.zero_grad()
-        opt_d.zero_grad()
-        self.manual_backward(g_loss, opt_g)
-        self.manual_optimizer_step(opt_g)
+        self.opt_g.zero_grad()
+        self.opt_d.zero_grad()
+        self.manual_backward(g_loss, self.opt_g)
+     #   self.manual_optimizer_step(self.opt_g)
+        self.opt_g.step()
         self.log("g_loss", g_loss, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
@@ -248,9 +248,9 @@ class DFGAN(pl.LightningModule):
 
     def configure_optimizers(self):
         opt_g = torch.optim.Adam(self.generator.parameters(),
-                                 lr=self.cfg.TRAIN.G_LR, betas=(0.5, 0.999))
+                                 lr=self.cfg.TRAIN.G_LR, betas=(0, 0.999))
         opt_d = torch.optim.Adam(self.discriminator.parameters(),
-                                 lr=self.cfg.TRAIN.D_LR, betas=(0.5, 0.999))
+                                 lr=self.cfg.TRAIN.D_LR, betas=(0, 0.999))
         return opt_g, opt_d
 
     def get_progress_bar_dict(self):
