@@ -124,31 +124,31 @@ if __name__ == "__main__":
         datamodule = CUB200DataModule(
             data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=int(cfg.WORKERS),
             embedding_type="RNN", im_size=cfg.TREE.BASE_SIZE)
+        datamodule.setup(stage="fit")
         dataloader = datamodule.train_dataloader()
-    dataset = TextDataset(cfg.DATA_DIR, 'train',
-                          base_size=cfg.TREE.BASE_SIZE,
-                          transform=image_transform)
-    print(dataset.n_words, dataset.embeddings_num)
-    assert dataset
-    dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, drop_last=True,
-        shuffle=True, num_workers=int(cfg.WORKERS))
-
+        text_encoder = None
+    else:
+        dataset = TextDataset(cfg.DATA_DIR, 'train',
+                              base_size=cfg.TREE.BASE_SIZE,
+                              transform=image_transform)
+        print(dataset.n_words, dataset.embeddings_num)
+        assert dataset
+        dataloader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, drop_last=True,
+            shuffle=True, num_workers=int(cfg.WORKERS))
+        text_encoder = RNN_ENCODER(dataset.n_words, nhidden=cfg.TEXT.EMBEDDING_DIM)
+        state_dict = torch.load(cfg.TEXT.DAMSM_NAME, map_location=lambda storage, loc: storage)
+        text_encoder.load_state_dict(state_dict)
+        text_encoder.cuda()
+        for p in text_encoder.parameters():
+            p.requires_grad = False
+        text_encoder.eval()
     # validation data #
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     netG = NetG(cfg.TRAIN.NF, 100, cfg.TEXT.EMBEDDING_DIM).to(device)
     netD = NetD(cfg.TRAIN.NF, cfg.TEXT.EMBEDDING_DIM).to(device)
-
-    text_encoder = RNN_ENCODER(dataset.n_words, nhidden=cfg.TEXT.EMBEDDING_DIM)
-    state_dict = torch.load(cfg.TEXT.DAMSM_NAME, map_location=lambda storage, loc: storage)
-    text_encoder.load_state_dict(state_dict)
-    text_encoder.cuda()
-
-    for p in text_encoder.parameters():
-        p.requires_grad = False
-    text_encoder.eval()
 
     state_epoch = 0
 

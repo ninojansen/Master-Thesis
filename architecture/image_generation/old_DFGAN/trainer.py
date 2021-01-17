@@ -56,6 +56,8 @@ def save_examples(output_dir, fake_images, number):
 def train_step(data, netG, netD, text_encoder, optimizerG, optimizerD, batch_size, device, pretrain):
     if pretrain:
         imgs, sent_emb, raw_str = data
+        imgs = imgs.to(device)
+        sent_emb = sent_emb.to(device)
     else:
         imags, captions, cap_lens, class_ids, keys = prepare_data(data)
 
