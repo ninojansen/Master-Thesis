@@ -93,7 +93,7 @@ if __name__ == "__main__":
     # if os.path.isdir(os.path.join(args.output_dir, cfg.CONFIG_NAME)):
     #     version = len(os.listdir(os.path.join(args.output_dir, cfg.CONFIG_NAME))) + 1
 
-    version = datetime.now().strftime("%d/%m_%H:%M:%S")
+    version = datetime.now().strftime("%d-%m_%H:%M:%S")
     if args.type == "all" or args.type == "vae" or args.type == "pretrain":
         # VAE training
         vae_logger = vae_logger = TensorBoardLogger(
