@@ -97,6 +97,12 @@ def sampling(text_encoder, netG, dataloader, device):
 
 
 if __name__ == "__main__":
+    seed = 100
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
     args = parse_args()
     if args.cfg_file is not None:
         cfg_from_file(args.cfg_file)
