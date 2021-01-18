@@ -275,9 +275,11 @@ class CUB200Dataset(data.Dataset):
 
     def load_image(self, filename):
         img_path = os.path.join(self.data_dir, "processed_images", filename + ".jpg")
-        img = self.norm(Image.open(img_path).convert('RGB'))
+        img = Image.open(img_path).convert('RGB')
         if self.transform:
             img = self.transform(img)
+        img = self.norm(img)
+
         return img
 
     def __getitem__(self, index):
