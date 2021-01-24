@@ -1,6 +1,9 @@
+
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
 import json
 import math
-import os
 import random
 
 import matplotlib.pyplot as plt
@@ -13,6 +16,10 @@ from PIL import Image
 from torch.autograd import Variable
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
+from sentence_transformers.readers import InputExample
+from architecture.embeddings.generator import EmbeddingGenerator
+from sentence_transformers import SentenceTransformer
+import pickle
 
 
 class EasyVQADataModule(pl.LightningDataModule):
@@ -38,8 +45,8 @@ class EasyVQADataModule(pl.LightningDataModule):
             train_size = math.ceil(size * 0.9)
             if self.val_split:
                 self.easy_vqa_train, self.easy_vqa_val = random_split(
-                    easy_vqa, [len(easy_vqa), size - train_size],
-                    generator=torch.Generator().manual_seed(1))
+                    easy_vqa, [train_size, size - train_size],
+                    generator=torch.Generator().manual_seed(42))
             else:
                 self.easy_vqa_train = easy_vqa
 
@@ -58,6 +65,22 @@ class EasyVQADataModule(pl.LightningDataModule):
         return DataLoader(self.easy_vqa_test, batch_size=self.batch_size, drop_last=True,
                           num_workers=self.num_workers, pin_memory=True)
 
+    def pretrain_embeddings(self):
+        train_dataset = EasyVQADataset(self.data_dir, split="train")
+        test_dataset = EasyVQADataset(self.data_dir, split="test")
+
+        texts = train_dataset.get_texts() | test_dataset.get_texts()
+        generator = EmbeddingGenerator(n_components=64)
+        model = SentenceTransformer('distilbert-base-nli-mean-tokens')
+        embeddings = generator.generate_embeddings(texts, model)
+        with open(os.path.join(self.data_dir, 'sbert_embeddings.pkl'), "wb") as fOut:
+            pickle.dump(embeddings, fOut, protocol=pickle.HIGHEST_PROTOCOL)
+
+        # finetuned_embeddings = generator.generate_embeddings(
+        #     self.get_texts(), generator.finetune(self.get_sentence_pairs(), model))
+        # with open(os.path.join(self.data_dir, 'sbert_finetuned_embeddings.pkl'), "wb") as fOut:
+        #     pickle.dump(finetuned_embeddings, fOut, protocol=pickle.HIGHEST_PROTOCOL)
+
 
 class EasyVQADataset(data.Dataset):
 
@@ -71,7 +94,12 @@ class EasyVQADataset(data.Dataset):
         self.split_dir = os.path.join(data_dir, split)
 
         self.im_dir = os.path.join(self.split_dir, "images")
+        self.load_embeddings()
         self.image_ids, self.qa_dict = self.load_qa()
+
+    def load_embeddings(self):
+        with open(os.path.join(self.data_dir, 'sbert_embeddings.pkl'), "rb") as fIn:
+            self.embeddings = pickle.load(fIn)
 
     def load_qa(self):
         questions_file = os.path.join(self.split_dir, "questions.json")
@@ -87,11 +115,26 @@ class EasyVQADataset(data.Dataset):
 
             return list(qa_dict.keys()), qa_dict
 
+    def get_sentence_pairs(self):
+        qa_pairs = []
+        for qas in self.qa_dict.values():
+            for qa in qas:
+                qa_pairs.append(InputExample(texts=[qa[0], qa[1]]))
+        return qa_pairs
+
+    def get_texts(self):
+        texts = set()
+        for qas in self.qa_dict.values():
+            for qa in qas:
+                texts.add(qa[0])
+                texts.add(qa[1])
+        return texts
+
     def load_image(self, image_id):
-        img = self.norm(Image.open(os.path.join(self.im_dir, f"{image_id}.png")).convert('RGB'))
+        img = Image.open(os.path.join(self.im_dir, f"{image_id}.png")).convert('RGB')
         if self.transform:
             img = self.transform(img)
-        return img
+        return self.norm(img)
 
     def __getitem__(self, index):
 
@@ -102,8 +145,15 @@ class EasyVQADataset(data.Dataset):
 
         img = self.load_image(self.image_ids[index])
 
-        combined = f"{question} {answer}."
-        return img, question, answer, combined
+        embedding = np.concatenate([self.embeddings[question], self.embeddings[answer]])
+        combined = f'{question} {answer}'
+        return img, combined, embedding
 
     def __len__(self):
         return len(self.image_ids)
+
+
+if __name__ == "__main__":
+    data_dir = "/home/nino/Documents/Datasets/EasyVQA/data"
+    datamodule = EasyVQADataModule(data_dir=data_dir)
+    datamodule.pretrain_embeddings()

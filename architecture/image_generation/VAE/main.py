@@ -68,7 +68,7 @@ if __name__ == "__main__":
     datamodule = None
     if cfg.DATASET_NAME == "easy_vqa":
         datamodule = EasyVQADataModule(data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE,
-                                       num_workers=num_workers, im_size=cfg.IM_SIZE, val_split=False)
+                                       num_workers=num_workers, im_size=cfg.IM_SIZE, val_split=True)
     elif cfg.DATASET_NAME == "cifar10":
         datamodule = CIFAR10DataModule(data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE,
                                        num_workers=num_workers)
@@ -113,7 +113,7 @@ if __name__ == "__main__":
             print(f"==============Training VAE model for pretraining==============")
             vae_trainer.fit(vae_model, datamodule)
 
-        if args.type == "pretrain":
+        if args.type == "all" or args.type == "pretrain":
             pretrained_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME,
                                                   version=f"pretrained_{version}")
             pretrained_trainer = pl.Trainer.from_argparse_args(

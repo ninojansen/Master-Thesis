@@ -39,8 +39,11 @@ class DFGAN_VAE(pl.LightningModule):
 
     def process_data(self, batch, dataset_name):
         if dataset_name == "easy_vqa":
-            images, questions, answers, combined = batch
-            return images, combined
+            images, qa, embeddings = batch
+            if self.eval_y == None:
+                self.eval_y = embeddings
+                self.eval_size = embeddings.size(0)
+            return images, embeddings
         elif dataset_name == "cifar10":
             images, target = batch
             target = F.one_hot(target, num_classes=10).float()
@@ -115,8 +118,11 @@ class DFGAN(pl.LightningModule):
 
     def process_data(self, batch, dataset_name):
         if dataset_name == "easy_vqa":
-            images, questions, answers, combined = batch
-            return images, combined, combined
+            images, qa, embeddings = batch
+            if self.eval_y == None:
+                self.eval_y = embeddings
+                self.eval_size = embeddings.size(0)
+            return images, embeddings, qa
         elif dataset_name == "cifar10":
             images, target = batch
             target_np = target.cpu().numpy()
