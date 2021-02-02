@@ -8,7 +8,8 @@ IM_SIZE: 64
 MODEL:
   NF: 32
   Z_DIM: 100
-  EF_DIM: 128
+  EF_DIM: 1536
+  EF_TYPE: "sbert"
 
 TRAIN:
   BATCH_SIZE: 24 #default 24

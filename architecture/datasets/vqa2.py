@@ -18,7 +18,7 @@ import json
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from sentence_transformers.readers import InputExample
-from architecture.embeddings.generator import EmbeddingGenerator
+from architecture.embeddings.text.generator import TextEmbeddingGenerator
 from sentence_transformers import SentenceTransformer
 import pickle
 
@@ -62,7 +62,7 @@ class VQA2DataModule(pl.LightningDataModule):
         test_dataset = VQA2Dataset(self.data_dir, split="test")
 
         texts = train_dataset.get_texts() | test_dataset.get_texts() | val_dataset.get_texts()
-        generator = EmbeddingGenerator()
+        generator = TextEmbeddingGenerator()
         model = SentenceTransformer('distilbert-base-nli-mean-tokens')
         embeddings = generator.generate_embeddings(texts, model)
         with open(os.path.join(self.data_dir, 'sbert_embeddings.pkl'), "wb") as fOut:

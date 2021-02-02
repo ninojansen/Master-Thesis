@@ -10,23 +10,28 @@ import torchvision
 import time
 from architecture.utils.inception_score import InceptionScore
 from architecture.image_generation.VAE.models.dfgan_model import NetD, NetG
+from architecture.utils.utils import gen_image_grid
+from easydict import EasyDict as edict
 
 cifar10_label_names = {0: "airplane", 1: "automobile", 2: "bird", 3: "cat",
                        4: "deer", 5: "dog", 6: "frog", 7: "horse", 8: "ship", 9: "truck"}
 
 
-class DFGAN_VAE(pl.LightningModule):
+class VAE_DFGAN(pl.LightningModule):
 
     def __init__(self, cfg):
         super().__init__()
+        if type(cfg) is dict:
+            cfg = edict(cfg)
         self.cfg = cfg
-        self.encoder = NetD(cfg.MODEL.NF, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=False)
+        self.save_hyperparameters(self.cfg)
+
+        self.encoder = NetD(cfg.MODEL.NF, cfg.IM_SIZE,
+                            cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=False)
         self.decoder = NetG(cfg.MODEL.NF, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
         self.kl_loss = lambda mu, logvar: -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
         self.start = time.perf_counter()
-
-        self.eval_y = None
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
@@ -37,30 +42,33 @@ class DFGAN_VAE(pl.LightningModule):
         # in lightning, forward defines the prediction/inference actions
         return self.decoder(x, y)
 
-    def process_data(self, batch, dataset_name):
-        if dataset_name == "easy_vqa":
-            images, qa, embeddings = batch
-            if self.eval_y == None:
-                self.eval_y = embeddings
-                self.eval_size = embeddings.size(0)
-            return images, embeddings
-        elif dataset_name == "cifar10":
-            images, target = batch
-            target = F.one_hot(target, num_classes=10).float()
-            if self.eval_y == None:
-                self.eval_size = 50
-                self.eval_y = F.one_hot(torch.randint(0, 10, (self.eval_size,))).type_as(target)
-            return images, target
-        elif dataset_name == "CUB200":
-            images, target, captions = batch
+    # def process_data(self, batch, dataset_name):
+    #     if dataset_name == "easy_vqa":
+    #         images, qa, embeddings = batch
+    #         if self.eval_y == None:
+    #             self.eval_y = embeddings
+    #             self.eval_size = embeddings.size(0)
+    #         return images, embeddings
+    #     elif dataset_name == "cifar10":
+    #         images, target = batch
+    #         target = F.one_hot(target, num_classes=10).float()
+    #         if self.eval_y == None:
+    #             self.eval_size = 50
+    #             self.eval_y = F.one_hot(torch.randint(0, 10, (self.eval_size,))).type_as(target)
+    #         return images, target
+    #     elif dataset_name == "CUB200":
+    #         images, target, captions = batch
 
-            if self.eval_y == None:
-                self.eval_y = target
-                self.eval_size = target.size(0)
-            return images, target
+    #         if self.eval_y == None:
+    #             self.eval_y = target
+    #             self.eval_size = target.size(0)
+    #         return images, target
 
     def training_step(self, batch, batch_idx):
-        x, y = self.process_data(batch, self.cfg.DATASET_NAME)
+        x = batch["img"]
+        y = batch["qa_embedding"]
+        self.eval_y = y
+        self.eval_text = batch["text"]
 
         mu, logvar = self.encoder(x, y)
         z = self.reparameterize(mu, logvar)
@@ -84,9 +92,10 @@ class DFGAN_VAE(pl.LightningModule):
             f"\nEpoch {self.current_epoch} finished in {round(elapsed_time, 2)}s")
 
         if self.current_epoch % self.trainer.check_val_every_n_epoch == 0:
-            noise = torch.randn((self.eval_size, self.cfg.MODEL.Z_DIM)).type_as(self.eval_y)
+            noise = torch.randn((self.eval_y.size(0), self.cfg.MODEL.Z_DIM)).type_as(self.eval_y)
             recon_x = self.forward(noise, self.eval_y)
-            grid = torchvision.utils.make_grid(recon_x, normalize=True)
+            #grid = torchvision.utils.make_grid(recon_x, normalize=True)
+            grid = gen_image_grid(recon_x, self.eval_text)
             self.logger.experiment.add_image(f"Epoch {self.current_epoch}", grid, global_step=self.current_epoch)
 
     def configure_optimizers(self):
@@ -99,7 +108,11 @@ class DFGAN(pl.LightningModule):
 
     def __init__(self, cfg, pretrained_encoder=None):
         super().__init__()
+        if type(cfg) is dict:
+            cfg = edict(cfg)
         self.cfg = cfg
+        self.save_hyperparameters(self.cfg)
+
         if pretrained_encoder:
             self.generator = pretrained_encoder
         else:
@@ -109,42 +122,45 @@ class DFGAN(pl.LightningModule):
         self.opt_g, self.opt_d = self.configure_optimizers()
         self.start = time.perf_counter()
         self.inception = InceptionScore()
-        self.eval_y = None
+      #  self.eval_y = None
 
     def forward(self, x, y=None):
         # in lightning, forward defines the prediction/inference actions
 
         return self.generator(x, y)
 
-    def process_data(self, batch, dataset_name):
-        if dataset_name == "easy_vqa":
-            images, qa, embeddings = batch
-            if self.eval_y == None:
-                self.eval_y = embeddings
-                self.eval_size = embeddings.size(0)
-            return images, embeddings, qa
-        elif dataset_name == "cifar10":
-            images, target = batch
-            target_np = target.cpu().numpy()
-            target = F.one_hot(target, num_classes=10).float()
+    # def process_data(self, batch, dataset_name):
+    #     if dataset_name == "easy_vqa":
+    #         images, qa, embeddings = batch
+    #         if self.eval_y == None:
+    #             self.eval_y = embeddings
+    #             self.eval_size = embeddings.size(0)
+    #         return images, embeddings, qa
+    #     elif dataset_name == "cifar10":
+    #         images, target = batch
+    #         target_np = target.cpu().numpy()
+    #         target = F.one_hot(target, num_classes=10).float()
 
-            raw_str = [cifar10_label_names[idx] for idx in target_np]
-            if self.eval_y == None:
-                self.eval_size = 50
-                self.eval_y = F.one_hot(torch.randint(0, 10, (self.eval_size,))).type_as(target)
-            return images, target, raw_str
-        elif dataset_name == "CUB200":
-            images, target, captions = batch
+    #         raw_str = [cifar10_label_names[idx] for idx in target_np]
+    #         if self.eval_y == None:
+    #             self.eval_size = 50
+    #             self.eval_y = F.one_hot(torch.randint(0, 10, (self.eval_size,))).type_as(target)
+    #         return images, target, raw_str
+    #     elif dataset_name == "CUB200":
+    #         images, target, captions = batch
 
-            if self.eval_y == None:
-                self.eval_y = target
-                self.eval_size = target.size(0)
-            return images, target, captions
+    #         if self.eval_y == None:
+    #             self.eval_y = target
+    #             self.eval_size = target.size(0)
+    #         return images, target, captions
 
     def training_step(self, batch, batch_idx, optimizer_idx):
       #  (opt_g, opt_d) = self.optimizers()
-        x, y, raw_str = self.process_data(batch, self.cfg.DATASET_NAME)
 
+        x = batch["img"]
+        y = batch["qa_embedding"]
+        self.eval_y = y
+        self.eval_text = batch["text"]
         batch_size = x.size(0)
 
         # 1. Discriminator loss
@@ -174,7 +190,10 @@ class DFGAN(pl.LightningModule):
         self.manual_backward(d_loss, self.opt_d)
        # self.manual_optimizer_step(self.opt_d)
         self.opt_d.step()
-        self.log("d_loss", d_loss, prog_bar=True)
+        self.log("d_loss_real", d_loss_real, on_step=False, on_epoch=True)
+        self.log("d_loss_fake", d_loss_fake, on_step=False, on_epoch=True)
+        self.log("d_loss_wrong", d_loss_wrong, on_step=False, on_epoch=True)
+        self.log("d_loss", d_loss, on_step=True, on_epoch=True, prog_bar=True)
 
         # 2. Matching aware gradient penalty on the discriminator
         interpolated = x.requires_grad_()
@@ -196,7 +215,7 @@ class DFGAN(pl.LightningModule):
         self.manual_backward(d_loss_gp, self.opt_d)
        # self.manual_optimizer_step(self.opt_d)
         self.opt_d.step()
-        self.log("d_loss_gp", d_loss_gp)
+        self.log("d_loss_gp", d_loss_gp, on_step=True, on_epoch=True)
 
         # 3. Generator loss
         fake_pred = self.discriminator(fake_x, y)
@@ -207,10 +226,11 @@ class DFGAN(pl.LightningModule):
         self.manual_backward(g_loss, self.opt_g)
      #   self.manual_optimizer_step(self.opt_g)
         self.opt_g.step()
-        self.log("g_loss", g_loss, prog_bar=True)
+        self.log("g_loss", g_loss, on_step=True, on_epoch=True, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
-        x, y, raw_str = self.process_data(batch, self.cfg.DATASET_NAME)
+        x = batch["img"]
+        y = batch["qa_embedding"]
 
         batch_size = self.cfg.TRAIN.BATCH_SIZE
         # Generate images
@@ -220,15 +240,17 @@ class DFGAN(pl.LightningModule):
 
         incep_mean, incep_std = self.inception.compute_score(fake_x, num_splits=1)
 
-        self.log("Inception score (val)", incep_mean)
+        self.log("Inception score (val)", on_step=False, on_epoch=True, incep_mean)
 
         if not self.trainer.running_sanity_check and batch_idx == 0:
-            grid = torchvision.utils.make_grid(fake_x, normalize=True)
+            grid = gen_image_grid(fake_x, batch["text"])
+           # grid = torchvision.utils.make_grid(fake_x, normalize=True)
             self.logger.experiment.add_image(f"Val epoch {self.current_epoch}",
                                              grid, global_step=self.current_epoch)
 
     def test_step(self, batch, batch_idx):
-        x, y, raw_str = self.process_data(batch, self.cfg.DATASET_NAME)
+        x = batch["img"]
+        y = batch["qa_embedding"]
 
         batch_size = self.cfg.TRAIN.BATCH_SIZE
         # Generate images
@@ -238,7 +260,7 @@ class DFGAN(pl.LightningModule):
 
         incep_mean, incep_std = self.inception.compute_score(fake_x, num_splits=1)
 
-        self.log("Inception score (test)", incep_mean)
+        self.log("Inception score (test)", on_step=False, on_epoch=True, incep_mean)
 
     def on_epoch_end(self):
         elapsed_time = time.perf_counter() - self.start
@@ -247,9 +269,9 @@ class DFGAN(pl.LightningModule):
             f"\nEpoch {self.current_epoch} finished in {round(elapsed_time, 2)}s")
 
         if self.current_epoch % self.trainer.check_val_every_n_epoch == 0:
-            noise = torch.randn((self.eval_size, self.cfg.MODEL.Z_DIM)).type_as(self.eval_y)
+            noise = torch.randn((self.eval_y.size(0), self.cfg.MODEL.Z_DIM)).type_as(self.eval_y)
             recon_x = self.forward(noise, self.eval_y)
-            grid = torchvision.utils.make_grid(recon_x, normalize=True)
+            grid = gen_image_grid(recon_x, self.eval_text)
             self.logger.experiment.add_image(f"Epoch {self.current_epoch}", grid, global_step=self.current_epoch)
 
     def configure_optimizers(self):

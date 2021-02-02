@@ -1,0 +1,23 @@
+CONFIG_NAME: "easy_vqa"
+
+DATASET_NAME: "easy_vqa"
+DATA_DIR: "/home/nino/Documents/Datasets/EasyVQA/data"
+
+IG:
+  CHECKPOINT: "/home/nino/Dropbox/Documents/Master/Thesis/architecture/image_generation/VAE/output/easy_vqa_bow/non_pretrained_02-02_12:25:56/checkpoints/epoch=52-step=312.ckpt"
+
+VQA:
+  CHECKPOINT: "/home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/easy_vqa_bow/vqa_02-02_12:55:40/checkpoints/epoch=16-step=27318.ckpt"
+
+MODEL:
+  EF_DIM: 39
+  EF_TYPE: "bow"
+
+TRAIN:
+  BATCH_SIZE: 24 #default 24
+  MAX_EPOCH: 601
+  LR: 0.0001
+  CHECKPOINT: ""
+
+TEST:
+  CHECKPOINT: ""

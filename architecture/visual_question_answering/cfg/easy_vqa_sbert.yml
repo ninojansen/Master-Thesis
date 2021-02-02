@@ -1,0 +1,19 @@
+CONFIG_NAME: "easy_vqa_sbert"
+
+DATASET_NAME: "easy_vqa"
+DATA_DIR: "/home/nino/Documents/Datasets/EasyVQA/data"
+
+MODEL:
+  IM_DIM: 4096
+  EF_DIM: 64
+  EF_TYPE: "sbert"
+  N_ANSWERS: 13
+
+TRAIN:
+  BATCH_SIZE: 32 #default 24
+  MAX_EPOCH: 30
+  LR: 0.01
+  CHECKPOINT: ""
+
+TEST:
+  CHECKPOINT: ""

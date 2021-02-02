@@ -67,8 +67,9 @@ if __name__ == "__main__":
     # Load the datamodule
     datamodule = None
     if cfg.DATASET_NAME == "easy_vqa":
-        datamodule = EasyVQADataModule(data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE,
-                                       num_workers=num_workers, im_size=cfg.IM_SIZE, val_split=True)
+        datamodule = EasyVQADataModule(
+            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers, im_size=cfg.IM_SIZE,
+            pretrained_text=True, text_embed_type=cfg.MODEL.EF_TYPE)
     elif cfg.DATASET_NAME == "cifar10":
         datamodule = CIFAR10DataModule(data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE,
                                        num_workers=num_workers)
@@ -102,7 +103,7 @@ if __name__ == "__main__":
             args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=vae_logger, default_root_dir=args.output_dir)
 
         if args.gan == "DFGAN":
-            vae_model = DFGAN_VAE(cfg)
+            vae_model = VAE_DFGAN(cfg)
         else:
             vae_model = VAE(cfg)
 

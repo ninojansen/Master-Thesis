@@ -19,7 +19,7 @@ import random
 import json
 from sentence_transformers import SentenceTransformer
 import math
-from architecture.embeddings.rnn import RNN_ENCODER
+from architecture.embeddings.text.rnn import RNN_ENCODER
 # from models import RNN_ENCODER
 
 
