@@ -10,7 +10,7 @@ import torchvision
 import time
 from architecture.utils.inception_score import InceptionScore
 from architecture.image_generation.VAE.models.dfgan_model import NetD, NetG
-from architecture.utils.utils import gen_image_grid
+from architecture.utils.utils import gen_image_grid, weights_init
 from easydict import EasyDict as edict
 
 cifar10_label_names = {0: "airplane", 1: "automobile", 2: "bird", 3: "cat",
@@ -28,7 +28,9 @@ class VAE_DFGAN(pl.LightningModule):
 
         self.encoder = NetD(cfg.MODEL.NF, cfg.IM_SIZE,
                             cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=False)
+        self.encoder.apply(weights_init)
         self.decoder = NetG(cfg.MODEL.NF, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
+        self.decoder.apply(weights_init)
         self.kl_loss = lambda mu, logvar: -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
         self.start = time.perf_counter()
@@ -82,7 +84,7 @@ class VAE_DFGAN(pl.LightningModule):
         kl_loss = self.kl_loss(mu, logvar)
 
         loss = recon_loss + kl_loss
-        self.log('vae_loss', loss)
+        self.log('vae_loss', loss, on_step=True, on_epoch=True)
         return loss
 
     def on_epoch_end(self):
@@ -94,8 +96,8 @@ class VAE_DFGAN(pl.LightningModule):
         if self.current_epoch % self.trainer.check_val_every_n_epoch == 0:
             noise = torch.randn((self.eval_y.size(0), self.cfg.MODEL.Z_DIM)).type_as(self.eval_y)
             recon_x = self.forward(noise, self.eval_y)
-            #grid = torchvision.utils.make_grid(recon_x, normalize=True)
-            grid = gen_image_grid(recon_x, self.eval_text)
+         #   grid = torchvision.utils.make_grid(recon_x, normalize=True)
+            grid = gen_image_grid(recon_x.detach(), self.eval_text)
             self.logger.experiment.add_image(f"Epoch {self.current_epoch}", grid, global_step=self.current_epoch)
 
     def configure_optimizers(self):
@@ -117,11 +119,14 @@ class DFGAN(pl.LightningModule):
             self.generator = pretrained_encoder
         else:
             self.generator = NetG(cfg.MODEL.NF, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
+        self.generator.apply(weights_init)
         self.discriminator = NetD(cfg.MODEL.NF, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=True)
-
+        self.discriminator.apply(weights_init)
         self.opt_g, self.opt_d = self.configure_optimizers()
         self.start = time.perf_counter()
         self.inception = InceptionScore()
+        self.real_acc = pl.metrics.Accuracy()
+        self.fake_acc = pl.metrics.Accuracy()
       #  self.eval_y = None
 
     def forward(self, x, y=None):
@@ -167,7 +172,7 @@ class DFGAN(pl.LightningModule):
 
         # Prediction on the real data
         real_pred = self.discriminator(x, y)
-
+        d_acc_real = self.real_acc(real_pred, torch.ones(batch_size, 1).type_as(x))
         d_loss_real = torch.nn.ReLU()(1.0 - real_pred).mean()
      #   d_loss_real = F.binary_cross_entropy_with_logits(real_pred, real)
         # Prediction on the mismatched/wrong labeled data
@@ -180,7 +185,7 @@ class DFGAN(pl.LightningModule):
 
         # Prediction on the generated images
         fake_pred = self.discriminator(fake_x.detach(), y)
-
+        d_acc_fake = self.fake_acc(fake_pred, torch.zeros(batch_size, 1).type_as(x))
         d_loss_fake = torch.nn.ReLU()(1.0 + fake_pred).mean()
         #d_loss_fake = F.binary_cross_entropy_with_logits(fake_pred, fake)
 
@@ -194,6 +199,8 @@ class DFGAN(pl.LightningModule):
         self.log("d_loss_fake", d_loss_fake, on_step=False, on_epoch=True)
         self.log("d_loss_wrong", d_loss_wrong, on_step=False, on_epoch=True)
         self.log("d_loss", d_loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("d_acc_real", d_acc_real, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("d_acc_fake", d_acc_fake, on_step=True, on_epoch=True, prog_bar=True)
 
         # 2. Matching aware gradient penalty on the discriminator
         interpolated = x.requires_grad_()

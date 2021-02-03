@@ -210,7 +210,7 @@ class NetD(nn.Module):
 
         if self.disc:
             x = self.logits(x)
-          #  x = x.view(-1, 1)
+            x = x.view(-1, 1)
             return x
         else:
             x = x.view(x.size(0), -1)
