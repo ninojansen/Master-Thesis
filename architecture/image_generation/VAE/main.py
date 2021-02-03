@@ -22,7 +22,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a DAMSM network')
     parser.add_argument('--cfg', dest='cfg_file',
                         help='optional config file',
-                        default='cfg/birds.yml', type=str)
+                        default='cfg/easy_vqa_sbert.yml', type=str)
     parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
     parser.add_argument('--ckpt', dest='ckpt', type=str, default=None)
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     if cfg.DATASET_NAME == "easy_vqa":
         datamodule = EasyVQADataModule(
             data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers, im_size=cfg.IM_SIZE,
-            pretrained_text=True, text_embed_type=cfg.MODEL.EF_TYPE)
+            pretrained_text=True, text_embed_type=cfg.MODEL.EF_TYPE, iterator="img")
     elif cfg.DATASET_NAME == "cifar10":
         datamodule = CIFAR10DataModule(data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE,
                                        num_workers=num_workers)

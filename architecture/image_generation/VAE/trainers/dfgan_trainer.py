@@ -215,7 +215,7 @@ class DFGAN(pl.LightningModule):
         self.manual_backward(d_loss_gp, self.opt_d)
        # self.manual_optimizer_step(self.opt_d)
         self.opt_d.step()
-        self.log("d_loss_gp", d_loss_gp, on_step=True, on_epoch=True)
+        self.log("d_loss_gp", d_loss_gp, on_step=False, on_epoch=True)
 
         # 3. Generator loss
         fake_pred = self.discriminator(fake_x, y)
@@ -240,7 +240,7 @@ class DFGAN(pl.LightningModule):
 
         incep_mean, incep_std = self.inception.compute_score(fake_x, num_splits=1)
 
-        self.log("Inception score (val)", on_step=False, on_epoch=True, incep_mean)
+        self.log("Inception score (val)", incep_mean, on_step=False, on_epoch=True)
 
         if not self.trainer.running_sanity_check and batch_idx == 0:
             grid = gen_image_grid(fake_x, batch["text"])
@@ -260,7 +260,7 @@ class DFGAN(pl.LightningModule):
 
         incep_mean, incep_std = self.inception.compute_score(fake_x, num_splits=1)
 
-        self.log("Inception score (test)", on_step=False, on_epoch=True, incep_mean)
+        self.log("Inception score (test)", incep_mean, on_step=False, on_epoch=True)
 
     def on_epoch_end(self):
         elapsed_time = time.perf_counter() - self.start
@@ -272,6 +272,7 @@ class DFGAN(pl.LightningModule):
             noise = torch.randn((self.eval_y.size(0), self.cfg.MODEL.Z_DIM)).type_as(self.eval_y)
             recon_x = self.forward(noise, self.eval_y)
             grid = gen_image_grid(recon_x, self.eval_text)
+          #  grid = torchvision.utils.make_grid(recon_x, normalize=True)
             self.logger.experiment.add_image(f"Epoch {self.current_epoch}", grid, global_step=self.current_epoch)
 
     def configure_optimizers(self):

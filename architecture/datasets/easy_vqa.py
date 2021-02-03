@@ -27,7 +27,7 @@ class EasyVQADataModule(pl.LightningDataModule):
 
     def __init__(
             self, data_dir, batch_size=24, im_size=64, num_workers=4, pretrained_text=False,
-            pretrained_images=False, text_embed_type="sbert"):
+            pretrained_images=False, text_embed_type="sbert", iterator="question"):
         super().__init__()
         self.data_dir = data_dir
         self.im_size = im_size
@@ -38,6 +38,7 @@ class EasyVQADataModule(pl.LightningDataModule):
         self.pretrained_images = pretrained_images
 
         self.text_embed_type = text_embed_type
+        self.iterator = iterator
 
     def setup(self, stage=None):
         image_transform = transforms.Compose([
@@ -47,11 +48,11 @@ class EasyVQADataModule(pl.LightningDataModule):
 
         self.easy_vqa_test = EasyVQADataset(
             self.data_dir, transform=image_transform, split="test", pretrained_text=self.pretrained_text,
-            pretrained_images=self.pretrained_images, text_embed_type=self.text_embed_type)
+            pretrained_images=self.pretrained_images, text_embed_type=self.text_embed_type, iterator=self.iterator)
         if stage == 'fit' or stage is None:
             self.easy_vqa_train = EasyVQADataset(
                 self.data_dir, transform=image_transform, split="train", pretrained_text=self.pretrained_text,
-                pretrained_images=self.pretrained_images, text_embed_type=self.text_embed_type)
+                pretrained_images=self.pretrained_images, text_embed_type=self.text_embed_type, iterator=self.iterator)
 
     def train_dataloader(self):
         return DataLoader(self.easy_vqa_train, batch_size=self.batch_size, drop_last=True,
@@ -138,11 +139,12 @@ class EasyVQADataModule(pl.LightningDataModule):
 class EasyVQADataset(data.Dataset):
 
     def __init__(self, data_dir, transform=None, split='train', norm=None, pretrained_text=False,
-                 pretrained_images=False, text_embed_type="sbert"):
+                 pretrained_images=False, text_embed_type="sbert", iterator="question"):
         self.data_dir = data_dir
         self.pretrained_text = pretrained_text
         self.pretrained_images = pretrained_images
         self.text_embed_type = text_embed_type
+        self.iterator = iterator
 
         if norm:
             self.norm = norm
@@ -208,13 +210,23 @@ class EasyVQADataset(data.Dataset):
         return np.load(os.path.join(self.data_dir, "img_embeddings", f"{image_id}_vgg16_features.npy"))
 
     def __getitem__(self, index):
-        question = self.questions[index][0]
-        answer = self.questions[index][1]
-        image_idx = self.questions[index][2]
+        if self.iterator == "question":
+            question = self.questions[index][0]
+            answer = self.questions[index][1]
+            image_idx = self.questions[index][2]
+        elif self.iterator == "image":
+            image_idx = self.images[index]
+            qa_list = self.imgToQA(image_idx)
+            qa = random.choice(qa_list)
+            question = qa[0]
+            answer = qa[1]
+        else:
+            question = self.questions[index][0]
+            answer = self.questions[index][1]
+            image_idx = self.questions[index][2]
 
-        text = f'{question} {answer}'
         img = self.load_image(image_idx)
-
+        text = f'{question} {answer}'
         if self.pretrained_text:
             qa_embedding = np.concatenate([self.question_embeddings[question], self.answer_embeddings[answer]])
             q_embedding = self.question_embeddings[question]
@@ -229,7 +241,12 @@ class EasyVQADataset(data.Dataset):
         return {'key': image_idx, "target": self.answers[answer], "img": img, "img_embedding": img_embedding, "question": question, "answer": answer, "text": text, "qa_embedding": qa_embedding, "q_embedding": q_embedding}
 
     def __len__(self):
-        return len(self.questions)
+        if self.iterator == "question":
+            return len(self.questions)
+        elif self.iterator == "img":
+            return len(self.imgToQA.keys())
+        else:
+            return len(self.questions)
 
 
 if __name__ == "__main__":
