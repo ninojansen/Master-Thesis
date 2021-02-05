@@ -10,7 +10,7 @@ MODEL:
   Z_DIM: 100
   EF_DIM: 39
   EF_TYPE: "bow"
-
+  GAN: "DFGAN"
 TRAIN:
   BATCH_SIZE: 64 #default 24
   MAX_EPOCH: 601

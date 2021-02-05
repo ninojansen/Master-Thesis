@@ -24,7 +24,8 @@ __C.MODEL = edict()
 __C.MODEL.NF = 8
 __C.MODEL.Z_DIM = 100
 __C.MODEL.EF_DIM = 10
-__C.MODEL.EF_TYPE = "BERT"
+__C.MODEL.EF_TYPE = "sbert"
+__C.MODEL.GAN = "DFGAN"
 __C.TEST = edict()
 __C.TEST.CHECKPOINT = ''
 

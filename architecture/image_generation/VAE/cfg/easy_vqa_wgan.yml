@@ -1,4 +1,4 @@
-CONFIG_NAME: "easy_vqa_sbert"
+CONFIG_NAME: "easy_vqa_wgan_bow"
 
 DATASET_NAME: "easy_vqa"
 DATA_DIR: "/home/nino/Documents/Datasets/EasyVQA/data"
@@ -8,14 +8,15 @@ IM_SIZE: 64
 MODEL:
   NF: 32
   Z_DIM: 100
-  EF_DIM: 1536
-  EF_TYPE: "sbert"
+  EF_DIM: 39
+  EF_TYPE: "bow"
   GAN: "WGAN"
+
 TRAIN:
-  BATCH_SIZE: 24 #default 24
+  BATCH_SIZE: 64 #default 24
   MAX_EPOCH: 601
-  G_LR: 0.0002
-  D_LR: 0.0002
+  G_LR: 0.0004
+  D_LR: 0.0004
   VAE_LR: 0.0002
   CHECKPOINT: ""
 

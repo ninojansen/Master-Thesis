@@ -15,6 +15,7 @@ import argparse
 from pl_bolts.datamodules import CIFAR10DataModule
 from architecture.image_generation.VAE.trainers.dcgan_trainer import *
 from architecture.image_generation.VAE.trainers.dfgan_trainer import *
+from architecture.image_generation.VAE.trainers.wgan_trainer import *
 from datetime import datetime
 
 
@@ -26,7 +27,7 @@ def parse_args():
     parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
     parser.add_argument('--ckpt', dest='ckpt', type=str, default=None)
-    parser.add_argument('--gan', dest='gan', type=str, default="DFGAN")
+    parser.add_argument('--gan', dest='gan', type=str, default=None)
     parser.add_argument('--type', dest='type', type=str, default="all")
     parser.add_argument('--test', dest='test', action="store_true", default=False)
     parser = pl.Trainer.add_argparse_args(parser)
@@ -45,6 +46,8 @@ if __name__ == "__main__":
     if args.max_epochs:
         cfg.TRAIN.MAX_EPOCH = args.max_epochs
 
+    if args.gan:
+        cfg.MODEL.GAN = args.gan
     print('Using config:')
     pprint.pprint(cfg)
 
@@ -102,10 +105,15 @@ if __name__ == "__main__":
         vae_trainer = vae_trainer = pl.Trainer.from_argparse_args(
             args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=vae_logger, default_root_dir=args.output_dir)
 
-        if args.gan == "DFGAN":
+        if cfg.MODEL.GAN == "DFGAN":
             vae_model = VAE_DFGAN(cfg)
-        else:
+        elif cfg.MODEL.GAN == "WGAN":
+            vae_model = VAE_WGAN(cfg)
+        elif cfg.MODEL.GAN == "DCGAN":
             vae_model = VAE(cfg)
+        else:
+            vae_model = None
+            print(f"GAN model {cfg.MODEL.GAN} not supported.")
 
         if cfg.TRAIN.VAE_CHECKPOINT:
             print(f"==============Using VAE model from checkpoint==============")
@@ -136,10 +144,16 @@ if __name__ == "__main__":
             args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=full_logger, automatic_optimization=False,
             default_root_dir=args.output_dir)
 
-        if args.gan == "DFGAN":
+        if cfg.MODEL.GAN == "DFGAN":
             full_model = DFGAN(cfg)
-        else:
+        elif cfg.MODEL.GAN == "WGAN":
+            full_model = WGAN(cfg)
+        elif cfg.MODEL.GAN == "DCGAN":
             full_model = DCGAN(cfg)
+        else:
+            full_model = None
+            print(f"GAN model {cfg.MODEL.GAN} not supported.")
+
         print(f"==============Training {cfg.CONFIG_NAME} model without pretraining==============")
         full_trainer.fit(full_model, datamodule)
         full_result = full_trainer.test(full_model)
