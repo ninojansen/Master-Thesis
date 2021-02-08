@@ -105,26 +105,25 @@ class Decoder(nn.Module):
         h_dim = z_dim + ef_dim
         self.fc1 = nn.Sequential(
             nn.Linear(h_dim, nf * 32 * 4 * 4, bias=False),
-            nn.BatchNorm1d(nf * 32 * 4 * 4),
-            nn.LeakyReLU(0.2))
+            nn.ReLU((True)))
 
         self.decode_img = nn.Sequential(
             nn.Conv2d(nf * 32, nf * 32, 3, 1, 1, bias=False),
-            nn.LeakyReLU(0.2),
+            nn.ReLU(True),
             nn.Upsample(scale_factor=2, mode='nearest'),
 
             nn.Conv2d(nf * 32, nf * 16, 3, 1, 1, bias=False),
             nn.BatchNorm2d(nf * 16),
-            nn.LeakyReLU(0.2),
+            nn.ReLU(True),
             nn.Upsample(scale_factor=2, mode='nearest'),
 
             nn.Conv2d(nf * 16, nf * 8, 3, 1, 1, bias=False),
             nn.BatchNorm2d(nf * 8),
-            nn.LeakyReLU(0.2),
+            nn.ReLU(True),
             nn.Upsample(scale_factor=2, mode='nearest'),
             nn.Conv2d(nf * 8, nf * 4, 3, 1, 1, bias=False),
             nn.BatchNorm2d(nf * 4),
-            nn.LeakyReLU(0.2),
+            nn.ReLU(True),
             nn.Upsample(scale_factor=2, mode='nearest'),
             nn.Conv2d(nf * 4, 3, 3, 1, 1),
             nn.Tanh(),
