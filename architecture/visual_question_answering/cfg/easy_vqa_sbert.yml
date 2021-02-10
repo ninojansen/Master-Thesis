@@ -5,14 +5,13 @@ DATA_DIR: "/home/nino/Documents/Datasets/EasyVQA/data"
 
 MODEL:
   IM_DIM: 4096
-  EF_DIM: 64
   EF_TYPE: "sbert"
   N_ANSWERS: 13
 
 TRAIN:
-  BATCH_SIZE: 32 #default 24
-  MAX_EPOCH: 30
-  LR: 0.01
+  BATCH_SIZE: 24 #default 24
+  MAX_EPOCH: 50
+  LR: 0.0004
   CHECKPOINT: ""
 
 TEST:

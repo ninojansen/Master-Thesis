@@ -4,10 +4,10 @@ DATASET_NAME: "easy_vqa"
 DATA_DIR: "/home/nino/Documents/Datasets/EasyVQA/data"
 
 IG:
-  CHECKPOINT: "/home/nino/Dropbox/Documents/Master/Thesis/architecture/image_generation/VAE/output/easy_vqa_bow/non_pretrained_02-02_12:25:56/checkpoints/epoch=52-step=312.ckpt"
+  CHECKPOINT: "/home/nino/Documents/Models/EasyVQA/non_pretrained_04-02_15:50:45/checkpoints/epoch=299-step=49799.ckpt"
 
 VQA:
-  CHECKPOINT: "/home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/easy_vqa_bow/vqa_02-02_12:55:40/checkpoints/epoch=16-step=27318.ckpt"
+  CHECKPOINT: "/home/nino/Documents/Models/EasyVQA/easy_vqa_bow_09-02_11:16:23/checkpoints/epoch=15-step=25711.ckpt"
 
 MODEL:
   EF_DIM: 39

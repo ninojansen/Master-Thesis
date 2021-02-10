@@ -65,16 +65,22 @@ if __name__ == "__main__":
     # Load the datamodule
     datamodule = None
     answer_map = None
-    if cfg.DATASET_NAME == "easy_vqa":
-        datamodule = EasyVQADataModule(
-            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers,
-            pretrained_images=True, pretrained_text=True, text_embed_type=cfg.MODEL.EF_TYPE)
-
-        answer_map = datamodule.get_answer_map()
-    version = datetime.now().strftime("%d-%m_%H:%M:%S")
 
     vqa_model = VQA.load_from_checkpoint(cfg.VQA.CHECKPOINT)
     ig_model = DFGAN.load_from_checkpoint(cfg.IG.CHECKPOINT)
+
+    if vqa_model.cfg.MODEL.EF_TYPE != ig_model.cfg.MODEL.EF_TYPE:
+        raise NameError(
+            f"VQA embedding type: {vqa_model.cfg.MODEL.EF_TYPE} does not match IG embedding type {ig_model.cfg.MODEL.EF_TYPE}")
+
+    ef_type = vqa_model.cfg.MODEL.EF_TYPE
+    if cfg.DATASET_NAME == "easy_vqa":
+        datamodule = EasyVQADataModule(
+            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers,
+            pretrained_images=True, pretrained_text=True, text_embed_type=ef_type)
+
+        answer_map = datamodule.get_answer_map()
+    version = datetime.now().strftime("%d-%m_%H:%M:%S")
 
     cycle_model = Cycle(cfg, vqa_model, ig_model, answer_map)
 

@@ -92,6 +92,7 @@ if __name__ == "__main__":
             data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers,
             embedding_type=cfg.MODEL.EF_TYPE, im_size=cfg.IM_SIZE)
 
+    cfg.MODEL.EF_DIM = datamodule.get_ef_dim(combined=True)
     # Initialize loggers
     # version = 1
     # if os.path.isdir(os.path.join(args.output_dir, cfg.CONFIG_NAME)):
@@ -101,7 +102,7 @@ if __name__ == "__main__":
     if args.type == "all" or args.type == "vae" or args.type == "pretrain":
         # VAE training
         vae_logger = vae_logger = TensorBoardLogger(
-            args.output_dir, name=cfg.CONFIG_NAME, version=f"vae_{version}")
+            args.output_dir, name=cfg.CONFIG_NAME, version=f"{cfg.CONFIG_NAME}_vae_{version}")
         vae_trainer = vae_trainer = pl.Trainer.from_argparse_args(
             args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=vae_logger, default_root_dir=args.output_dir)
 
@@ -124,7 +125,7 @@ if __name__ == "__main__":
 
         if args.type == "all" or args.type == "pretrain":
             pretrained_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME,
-                                                  version=f"pretrained_{version}")
+                                                  version=f"{cfg.CONFIG_NAME}_pretrained_{version}")
             pretrained_trainer = pl.Trainer.from_argparse_args(
                 args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=pretrained_logger, automatic_optimization=False,
                 default_root_dir=args.output_dir)
@@ -139,7 +140,8 @@ if __name__ == "__main__":
             print(pretrained_result)
 
     if args.type == "all" or args.type == "no_pretrain":
-        full_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, version=f"non_pretrained_{version}")
+        full_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME,
+                                        version=f"{cfg.CONFIG_NAME}_non_pretrained_{version}")
         full_trainer = pl.Trainer.from_argparse_args(
             args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=full_logger, automatic_optimization=False,
             default_root_dir=args.output_dir)

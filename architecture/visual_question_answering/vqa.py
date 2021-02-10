@@ -63,16 +63,21 @@ if __name__ == "__main__":
     # Load the datamodule
     datamodule = None
     if cfg.DATASET_NAME == "easy_vqa":
+        norm = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])])
         datamodule = EasyVQADataModule(
             data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers,
-            pretrained_images=True, pretrained_text=True, text_embed_type=cfg.MODEL.EF_TYPE)
+            pretrained_images=False, pretrained_text=True, text_embed_type=cfg.MODEL.EF_TYPE)
+    cfg.MODEL.EF_DIM = datamodule.get_ef_dim(combined=False)
 
     version = datetime.now().strftime("%d-%m_%H:%M:%S")
 
-    logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, version=f"vqa_{version}")
+    logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, version=f"{cfg.CONFIG_NAME}_{version}")
     trainer = pl.Trainer.from_argparse_args(
-        args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=logger, default_root_dir=args.output_dir, auto_lr_find=True,
-    )
+        args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=logger, default_root_dir=args.output_dir,
+        auto_lr_find=True)
 
     model = VQA(cfg)
 

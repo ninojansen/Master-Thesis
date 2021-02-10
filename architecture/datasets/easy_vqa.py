@@ -40,6 +40,19 @@ class EasyVQADataModule(pl.LightningDataModule):
         self.text_embed_type = text_embed_type
         self.iterator = iterator
 
+        self.question_embeddings, self.answer_embeddings = self.load_embeddings()
+
+    def load_embeddings(self):
+        question_embeddings = None
+        answer_embeddings = None
+        if os.path.exists(os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl')):
+            with open(os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl'), "rb") as fIn:
+                question_embeddings = pickle.load(fIn)
+        if os.path.exists(os.path.join(self.data_dir, f'{self.text_embed_type}_answer_embeddings.pkl')):
+            with open(os.path.join(self.data_dir, f'{self.text_embed_type}_answer_embeddings.pkl'), "rb") as fIn:
+                answer_embeddings = pickle.load(fIn)
+        return question_embeddings, answer_embeddings
+
     def setup(self, stage=None):
         image_transform = transforms.Compose([
             transforms.Resize(int(self.im_size * 76 / 64)),
@@ -47,12 +60,13 @@ class EasyVQADataModule(pl.LightningDataModule):
             transforms.RandomHorizontalFlip()])
 
         self.easy_vqa_test = EasyVQADataset(
-            self.data_dir, transform=image_transform, split="test", pretrained_text=self.pretrained_text,
-            pretrained_images=self.pretrained_images, text_embed_type=self.text_embed_type, iterator=self.iterator)
+            self.data_dir, transform=image_transform, split="test", question_embeddings=self.question_embeddings,
+            answer_embeddings=self.answer_embeddings, pretrained_images=self.pretrained_images, iterator=self.iterator)
         if stage == 'fit' or stage is None:
             self.easy_vqa_train = EasyVQADataset(
-                self.data_dir, transform=image_transform, split="train", pretrained_text=self.pretrained_text,
-                pretrained_images=self.pretrained_images, text_embed_type=self.text_embed_type, iterator=self.iterator)
+                self.data_dir, transform=image_transform, split="train", question_embeddings=self.question_embeddings,
+                answer_embeddings=self.answer_embeddings, pretrained_images=self.pretrained_images,
+                iterator=self.iterator)
 
     def train_dataloader(self):
         return DataLoader(self.easy_vqa_train, batch_size=self.batch_size, drop_last=True,
@@ -66,16 +80,20 @@ class EasyVQADataModule(pl.LightningDataModule):
         return DataLoader(self.easy_vqa_test, batch_size=self.batch_size, drop_last=True,
                           num_workers=self.num_workers, pin_memory=True)
 
+    def get_ef_dim(self, combined=False):
+        if combined:
+            return len(list(self.question_embeddings.values())[0]) + len(list(self.answer_embeddings.values())[0])
+        else:
+            return len(list(self.question_embeddings.values())[0])
+
     def get_answer_map(self):
-        with open(os.path.join(self.data_dir, f'{self.text_embed_type}_answer_embeddings.pkl'), "rb") as fIn:
-            answer_embeddings = pickle.load(fIn)
         answers = {"yes": 0, "no": 1, "circle": 2, "rectangle": 3, "triangle": 4, "red": 5,
                    "green": 6, "blue": 7, "black": 8, "gray": 9, "teal": 10, "brown": 11, "yellow": 12}
 
         answer_map = list(range(0, 13))
 
         for key, value in answers.items():
-            answer_map[value] = (key, answer_embeddings[key])
+            answer_map[value] = (key, self.answer_embeddings[key])
         return answer_map
 
     def generate_text_embeds(self, type="sbert"):
@@ -89,15 +107,15 @@ class EasyVQADataModule(pl.LightningDataModule):
         print(f"Generating {type} embeddings...")
         if type == "sbert":
             model = SentenceTransformer('distilbert-base-nli-mean-tokens')
-            question_embeddings, question_dim = generator.generate_sbert_embeddings(questions, model,)
-            answer_embeddings, answer_dim = generator.generate_sbert_embeddings(answers, model,)
+            question_embeddings, question_dim = generator.generate_sbert_embeddings(questions, model, n_components=12)
+            answer_embeddings, answer_dim = generator.generate_sbert_embeddings(answers, model, n_components=12)
 
         elif type == "sbert_finetuned":
             model = SentenceTransformer('distilbert-base-nli-mean-tokens')
             train_examples = train_dataset.get_sentence_pairs()
             model = generator.finetune(train_examples, model, epochs=2)
-            question_embeddings, question_dim = generator.generate_sbert_embeddings(questions, model,)
-            answer_embeddings, answer_dim = generator.generate_sbert_embeddings(answers, model,)
+            question_embeddings, question_dim = generator.generate_sbert_embeddings(questions, model, n_components=12)
+            answer_embeddings, answer_dim = generator.generate_sbert_embeddings(answers, model, n_components=12)
 
         elif type == "bow":
             question_embeddings, question_dim = generator.generate_bow_embeddings(questions)
@@ -138,12 +156,10 @@ class EasyVQADataModule(pl.LightningDataModule):
 
 class EasyVQADataset(data.Dataset):
 
-    def __init__(self, data_dir, transform=None, split='train', norm=None, pretrained_text=False,
-                 pretrained_images=False, text_embed_type="sbert", iterator="question"):
+    def __init__(self, data_dir, transform=None, split='train', norm=None, question_embeddings=None,
+                 answer_embeddings=None, pretrained_images=False, iterator="question"):
         self.data_dir = data_dir
-        self.pretrained_text = pretrained_text
         self.pretrained_images = pretrained_images
-        self.text_embed_type = text_embed_type
         self.iterator = iterator
 
         if norm:
@@ -153,21 +169,16 @@ class EasyVQADataset(data.Dataset):
             self.norm = transforms.Compose([
                 transforms.ToTensor(),
                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
         self.transform = transform
 
         self.split_dir = os.path.join(data_dir, split)
 
         self.im_dir = os.path.join(self.split_dir, "images")
-        if self.pretrained_text:
-            self.question_embeddings, self.answer_embeddings = self.load_text_embeddings()
-        self.questions, self.answers, self.images, self.imgToQA = self.load_data()
 
-    def load_text_embeddings(self):
-        with open(os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl'), "rb") as fIn:
-            question_embeddings = pickle.load(fIn)
-        with open(os.path.join(self.data_dir, f'{self.text_embed_type}_answer_embeddings.pkl'), "rb") as fIn:
-            answer_embeddings = pickle.load(fIn)
-        return question_embeddings, answer_embeddings
+        self.question_embeddings = question_embeddings
+        self.answer_embeddings = answer_embeddings
+        self.questions, self.answers, self.images, self.imgToQA = self.load_data()
 
     def load_data(self):
         questions_file = os.path.join(self.split_dir, "questions.json")
@@ -227,12 +238,13 @@ class EasyVQADataset(data.Dataset):
 
         img = self.load_image(image_idx)
         text = f'{question} {answer}'
-        if self.pretrained_text:
-            qa_embedding = np.concatenate([self.question_embeddings[question], self.answer_embeddings[answer]])
+        qa_embedding = 0
+        q_embedding = 0
+        if self.question_embeddings:
             q_embedding = self.question_embeddings[question]
-        else:
-            qa_embedding = 0
-            q_embedding = 0
+            if self.answer_embeddings:
+                qa_embedding = np.concatenate([self.question_embeddings[question], self.answer_embeddings[answer]])
+
         if self.pretrained_images:
             img_embedding = self.load_image_features(image_idx)
         else:
