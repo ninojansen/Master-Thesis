@@ -45,12 +45,14 @@ class EasyVQADataModule(pl.LightningDataModule):
     def load_embeddings(self):
         question_embeddings = None
         answer_embeddings = None
-        if os.path.exists(os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl')):
-            with open(os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl'), "rb") as fIn:
-                question_embeddings = pickle.load(fIn)
-        if os.path.exists(os.path.join(self.data_dir, f'{self.text_embed_type}_answer_embeddings.pkl')):
-            with open(os.path.join(self.data_dir, f'{self.text_embed_type}_answer_embeddings.pkl'), "rb") as fIn:
-                answer_embeddings = pickle.load(fIn)
+        if not os.path.exists(os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl')):
+            self.generate_text_embeds(self.text_embed_type)
+        with open(os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl'), "rb") as fIn:
+            question_embeddings = pickle.load(fIn)
+
+        with open(os.path.join(self.data_dir, f'{self.text_embed_type}_answer_embeddings.pkl'), "rb") as fIn:
+            answer_embeddings = pickle.load(fIn)
+
         return question_embeddings, answer_embeddings
 
     def setup(self, stage=None):
@@ -87,14 +89,10 @@ class EasyVQADataModule(pl.LightningDataModule):
             return len(list(self.question_embeddings.values())[0])
 
     def get_answer_map(self):
-        answers = {"yes": 0, "no": 1, "circle": 2, "rectangle": 3, "triangle": 4, "red": 5,
-                   "green": 6, "blue": 7, "black": 8, "gray": 9, "teal": 10, "brown": 11, "yellow": 12}
-
-        answer_map = list(range(0, 13))
-
-        for key, value in answers.items():
-            answer_map[value] = (key, self.answer_embeddings[key])
-        return answer_map
+        answers_file = os.path.join(self.data_dir, "answers.txt")
+        with open(answers_file, 'r') as file:
+            answers = dict((key, value.strip()) for key, value in enumerate(file))
+        return answers
 
     def generate_text_embeds(self, type="sbert"):
         train_dataset = EasyVQADataset(self.data_dir, split="train")
@@ -182,8 +180,11 @@ class EasyVQADataset(data.Dataset):
 
     def load_data(self):
         questions_file = os.path.join(self.split_dir, "questions.json")
-        answers = {"yes": 0, "no": 1, "circle": 2, "rectangle": 3, "triangle": 4, "red": 5,
-                   "green": 6, "blue": 7, "black": 8, "gray": 9, "teal": 10, "brown": 11, "yellow": 12}
+        answers_file = os.path.join(self.data_dir, "answers.txt")
+        with open(answers_file, 'r') as file:
+            answers = dict((value.strip(), i) for i, value in enumerate(file))
+        # answers = {"yes": 0, "no": 1, "circle": 2, "rectangle": 3, "triangle": 4, "red": 5,
+        #            "green": 6, "blue": 7, "black": 8, "gray": 9, "teal": 10, "brown": 11, "yellow": 12}
         with open(questions_file, 'r') as file:
             questions = json.load(file)
 
@@ -266,7 +267,7 @@ if __name__ == "__main__":
     datamodule = EasyVQADataModule(data_dir=data_dir, num_workers=1)
     datamodule.generate_text_embeds(type="bow")
     datamodule.generate_text_embeds(type="sbert")
-    datamodule.generate_text_embeds(type="sbert_finetuned")
+    # datamodule.generate_text_embeds(type="sbert_finetuned")
 
     # datamodule.generate_image_embeddings()
 

@@ -25,12 +25,31 @@ import pickle
 
 class VQA2DataModule(pl.LightningDataModule):
 
-    def __init__(self, data_dir, batch_size=24, im_size=256, num_workers=4):
+    def __init__(self, data_dir, batch_size=24, im_size=256, num_workers=4, text_embed_type="sbert"):
         super().__init__()
         self.data_dir = data_dir
         self.im_size = im_size
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.text_embed_type = text_embed_type
+
+        self.question_embeddings, self.answer_embeddings = self.load_embeddings()
+
+    def load_embeddings(self):
+        question_embeddings = None
+        answer_embeddings = None
+        if os.path.exists(os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl')):
+            with open(os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl'), "rb") as fIn:
+                question_embeddings = pickle.load(fIn)
+        else:
+            print(f"{self.text_embed_type} question embeddings do not exist at file location: {os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl')}")
+        if os.path.exists(os.path.join(self.data_dir, f'{self.text_embed_type}_answer_embeddings.pkl')):
+            with open(os.path.join(self.data_dir, f'{self.text_embed_type}_answer_embeddings.pkl'), "rb") as fIn:
+                answer_embeddings = pickle.load(fIn)
+        else:
+            print(f"{self.text_embed_type} answer embeddings do not exist at file location: {os.path.join(self.data_dir, f'{self.text_embed_type}_answer_embeddings.pkl')}")
+
+        return question_embeddings, answer_embeddings
 
     def setup(self, stage=None):
         image_transform = transforms.Compose([
@@ -42,7 +61,9 @@ class VQA2DataModule(pl.LightningDataModule):
             self.vqa2_train = VQA2Dataset(self.data_dir, transform=image_transform, split="train")
             self.vqa2_val = VQA2Dataset(self.data_dir, transform=image_transform, split="val")
         if stage == "test" or stage is None:
-            self.vqa2_test = VQA2Dataset(self.data_dir, transform=image_transform, split="test",)
+            # Test split has no answers  so using validation split instead
+            self.vqa2_test = VQA2Dataset(self.data_dir, transform=image_transform, split="val",)
+           # self.vqa2_test = VQA2Dataset(self.data_dir, transform=image_transform, split="test",)
 
     def train_dataloader(self):
         return DataLoader(self.vqa2_train, batch_size=self.batch_size, drop_last=True,
@@ -56,32 +77,53 @@ class VQA2DataModule(pl.LightningDataModule):
         return DataLoader(self.vqa2_test, batch_size=self.batch_size, drop_last=True,
                           num_workers=self.num_workers, pin_memory=True)
 
-    def pretrain_embeddings(self):
+    def generate_text_embeds(self, type="sbert"):
         train_dataset = VQA2Dataset(self.data_dir, split="train")
         val_dataset = VQA2Dataset(self.data_dir, split="val")
-        test_dataset = VQA2Dataset(self.data_dir, split="test")
 
-        texts = train_dataset.get_texts() | test_dataset.get_texts() | val_dataset.get_texts()
+        # TODO implement these functions
+        questions = train_dataset.get_questions() | val_dataset.get_questions()
+        answers = train_dataset.get_answers() | val_dataset.get_answers()
+
         generator = TextEmbeddingGenerator()
-        model = SentenceTransformer('distilbert-base-nli-mean-tokens')
-        embeddings = generator.generate_embeddings(texts, model)
-        with open(os.path.join(self.data_dir, 'sbert_embeddings.pkl'), "wb") as fOut:
-            pickle.dump(embeddings, fOut, protocol=pickle.HIGHEST_PROTOCOL)
+        print(f"Generating {type} embeddings...")
+        if type == "sbert":
+            model = SentenceTransformer('distilbert-base-nli-mean-tokens')
+            question_embeddings, question_dim = generator.generate_sbert_embeddings(questions, model, n_components=256)
+            answer_embeddings, answer_dim = generator.generate_sbert_embeddings(answers, model, n_components=256)
 
-        # finetuned_embeddings = generator.generate_embeddings(
-        #     self.get_texts(), generator.finetune(self.get_sentence_pairs(), model))
-        # with open(os.path.join(self.data_dir, 'sbert_finetuned_embeddings.pkl'), "wb") as fOut:
-        #     pickle.dump(finetuned_embeddings, fOut, protocol=pickle.HIGHEST_PROTOCOL)
+        elif type == "sbert_finetuned":
+            model = SentenceTransformer('distilbert-base-nli-mean-tokens')
+            train_examples = train_dataset.get_sentence_pairs()
+            model = generator.finetune(train_examples, model, epochs=2)
+            question_embeddings, question_dim = generator.generate_sbert_embeddings(questions, model, n_components=256)
+            answer_embeddings, answer_dim = generator.generate_sbert_embeddings(answers, model, n_components=256)
+
+        elif type == "bow":
+            question_embeddings, question_dim = generator.generate_bow_embeddings(questions)
+            answer_embeddings, answer_dim = generator.generate_bow_embeddings(answers)
+        else:
+            print(f"Unsupported embedding type: {type}")
+            return
+
+        print(f"{type} question embedding dim={question_dim}")
+        print(f"{type} answer embedding dim={answer_dim}")
+        with open(os.path.join(self.data_dir, f'{type}_question_embeddings.pkl'), "wb") as fOut:
+            pickle.dump(question_embeddings, fOut, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(os.path.join(self.data_dir, f'{type}_answer_embeddings.pkl'), "wb") as fOut:
+            pickle.dump(answer_embeddings, fOut, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 class VQA2Dataset(data.Dataset):
-    def __init__(self, data_dir, transform=None, split="train"):
+    def __init__(self, data_dir, transform=None, split="train", answer_embeddings=None, question_embeddings=None):
         self.transform = transform
         self.norm = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         annotations_file = None
         self.split = split
+        self.answer_embeddings = answer_embeddings
+        self.question_embeddings = question_embeddings
         if split == "val":
             self.type = "val2014"
             self.images_folder = os.path.join(data_dir, "images/mscoco/val2014")
@@ -137,16 +179,19 @@ class VQA2Dataset(data.Dataset):
 
         return self.norm(img)
 
-    def get_texts(self):
-        texts = set()
+    def get_questions(self):
+        questions = set()
         for q in self.questions:
-            # Test set has no answers available
-            if self.split != "test":
-                possible_answers = self.qa[q["question_id"]]
-                texts.add(q["question"])
-                for answer in possible_answers["answers"]:
-                    texts.add(answer["answer"])
-        return texts
+            questions.add(q["question"])
+        return questions
+
+    def get_answers(self):
+        answers = set()
+        for q in self.questions:
+            possible_answers = self.qa[q["question_id"]]
+            for answer in possible_answers["answers"]:
+                answers.add(answer['answer'])
+        return answers
 
     def get_sentence_pairs(self):
         qa_pairs = []
@@ -172,9 +217,18 @@ class VQA2Dataset(data.Dataset):
 
         a = self.qa[q["question_id"]]
         # Randomly sample an answer from the list of viable answers
-        answer = random.choice(a["answers"])
+        a = random.choice(a["answers"])
+        answer = a["answer"]
 
-        return q["question"], answer["answer"], img
+        question = q["question"]
+        text = f'{question} {answer}'
+        qa_embedding = 0
+        q_embedding = 0
+        if self.question_embeddings:
+            q_embedding = self.question_embeddings[question]
+            if self.answer_embeddings:
+                qa_embedding = np.concatenate([self.question_embeddings[question], self.answer_embeddings[answer]])
+        return {'key': q["image_id"], "target": 0, "img": img, "img_embedding": 0, "question": question, "answer": answer, "text": text, "qa_embedding": qa_embedding, "q_embedding": q_embedding}
 
     def __len__(self):
         return len(self.questions)
@@ -183,16 +237,11 @@ class VQA2Dataset(data.Dataset):
 if __name__ == "__main__":
     data_dir = "/home/nino/Documents/Datasets/VQA"
     datamodule = VQA2DataModule(data_dir=data_dir)
-    datamodule.pretrain_embeddings()
+    datamodule.generate_text_embeds(type="bow")
+    datamodule.generate_text_embeds(type="sbert")
+    # datamodule.generate_text_embeds(type="sbert_finetuned")
 
-# image_transform = transforms.Compose([
-#     transforms.Resize(int(256 * 76 / 64)),
-#     transforms.RandomCrop(256),
-#     transforms.RandomHorizontalFlip()])
-
-# dataset = VQA2(data_dir="/home/nino/Documents/Datasets/VQA", transform=image_transform, split="train")
-# loader = DataLoader(dataset, batch_size=24, drop_last=True,
-#                     shuffle=True, num_workers=4, pin_memory=True)
-
-# for batch in tqdm(loader):
-#     q, a, i = batch
+    datamodule = VQA2DataModule(data_dir=data_dir, num_workers=1, pretrained_text=True)
+    datamodule.setup()
+    for batch in datamodule.train_dataloader():
+        print(1)

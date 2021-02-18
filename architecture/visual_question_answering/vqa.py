@@ -21,7 +21,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a DAMSM network')
     parser.add_argument('--cfg', dest='cfg_file',
                         help='optional config file',
-                        default='cfg/easy_vqa_bow.yml', type=str)
+                        default='cfg/ext_easy_vqa_sbert.yml', type=str)
     parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
     parser.add_argument('--test', dest='test', action="store_true", default=False)
@@ -51,6 +51,7 @@ if __name__ == "__main__":
     else:
         num_workers = 4 * args.gpus
 
+    num_workers = 1
     # --fast_dev_run // Does 1 batch and 1 epoch for quick
     # --precision 16 // for 16-bit precision
     # --progress_bar_refresh_rate 0  // Disable progress bar
@@ -71,6 +72,7 @@ if __name__ == "__main__":
             data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers,
             pretrained_images=False, pretrained_text=True, text_embed_type=cfg.MODEL.EF_TYPE)
     cfg.MODEL.EF_DIM = datamodule.get_ef_dim(combined=False)
+    cfg.MODEL.N_ANSWERS = len(datamodule.get_answer_map())
 
     version = datetime.now().strftime("%d-%m_%H:%M:%S")
 
