@@ -129,10 +129,17 @@ if __name__ == "__main__":
             pretrained_trainer = pl.Trainer.from_argparse_args(
                 args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=pretrained_logger, automatic_optimization=False,
                 default_root_dir=args.output_dir)
-            if args.gan == "DFGAN":
+
+            if cfg.MODEL.GAN == "DFGAN":
                 pretrained_model = DFGAN(cfg, vae_model.decoder)
-            else:
+            elif cfg.MODEL.GAN == "WGAN":
+                pretrained_model = WGAN(cfg, vae_model.decoder)
+            elif cfg.MODEL.GAN == "DCGAN":
                 pretrained_model = DCGAN(cfg, vae_model.decoder)
+            else:
+                pretrained_model = None
+                print(f"GAN model {cfg.MODEL.GAN} not supported.")
+
             print(f"==============Training {cfg.CONFIG_NAME} model with pretraining==============")
             pretrained_trainer.fit(pretrained_model, datamodule)
             pretrained_result = pretrained_trainer.test(pretrained_model)
