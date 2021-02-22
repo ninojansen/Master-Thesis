@@ -21,7 +21,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a DAMSM network')
     parser.add_argument('--cfg', dest='cfg_file',
                         help='optional config file',
-                        default='cfg/ext_easy_vqa_sbert.yml', type=str)
+                        default='cfg/easyVQA/ext_sbert.yml', type=str)
     parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
     parser.add_argument('--test', dest='test', action="store_true", default=False)

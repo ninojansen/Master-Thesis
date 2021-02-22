@@ -48,6 +48,8 @@ class EasyVQADataModule(pl.LightningDataModule):
         if not os.path.exists(os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl')):
             self.generate_text_embeds(self.text_embed_type)
         with open(os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl'), "rb") as fIn:
+            print(
+                f"Loading embeddings from {os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl')}")
             question_embeddings = pickle.load(fIn)
 
         with open(os.path.join(self.data_dir, f'{self.text_embed_type}_answer_embeddings.pkl'), "rb") as fIn:
@@ -105,15 +107,19 @@ class EasyVQADataModule(pl.LightningDataModule):
         print(f"Generating {type} embeddings...")
         if type == "sbert":
             model = SentenceTransformer('distilbert-base-nli-mean-tokens')
-            question_embeddings, question_dim = generator.generate_sbert_embeddings(questions, model, n_components=12)
-            answer_embeddings, answer_dim = generator.generate_sbert_embeddings(answers, model, n_components=12)
+            question_embeddings, question_dim = generator.generate_sbert_embeddings(
+                questions, model, n_components=len(self.get_answer_map()) - 1)
+            answer_embeddings, answer_dim = generator.generate_sbert_embeddings(
+                answers, model, n_components=len(self.get_answer_map()) - 1)
 
         elif type == "sbert_finetuned":
             model = SentenceTransformer('distilbert-base-nli-mean-tokens')
             train_examples = train_dataset.get_sentence_pairs()
             model = generator.finetune(train_examples, model, epochs=2)
-            question_embeddings, question_dim = generator.generate_sbert_embeddings(questions, model, n_components=12)
-            answer_embeddings, answer_dim = generator.generate_sbert_embeddings(answers, model, n_components=12)
+            question_embeddings, question_dim = generator.generate_sbert_embeddings(
+                questions, model, n_components=len(self.get_answer_map()) - 1)
+            answer_embeddings, answer_dim = generator.generate_sbert_embeddings(
+                answers, model, n_components=len(self.get_answer_map()) - 1)
 
         elif type == "bow":
             question_embeddings, question_dim = generator.generate_bow_embeddings(questions)

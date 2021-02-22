@@ -300,5 +300,6 @@ class DataGenerator:
         # else:
         #     raise Exception('Invalid shape!')
 if __name__ == "__main__":
+   # data_dir = "/data/s2965690/datasets/ExtEasyVQA/"
     data_dir = "/home/nino/Documents/Datasets/ExtEasyVQA/"
-    generator = DataGenerator(data_dir, 64, 4000)
+    generator = DataGenerator(data_dir, 64, 10000)

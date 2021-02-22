@@ -3,21 +3,21 @@
 # import sys
 # sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(
 #     os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))))
-from matplotlib.pyplot import text, ylabel
 import pytorch_lightning as pl
 import torch.nn.functional as F
 import torch
 import torchvision
 import time
 from architecture.utils.inception_score import InceptionScore
-from architecture.image_generation.VAE.models.dfgan_model import NetD, NetG
+from architecture.image_generation.models.dfgan_model import NetD, NetG
 from architecture.utils.utils import gen_image_grid, weights_init
 from easydict import EasyDict as edict
-from torch.autograd import Variable
-from torch import autograd
+
+cifar10_label_names = {0: "airplane", 1: "automobile", 2: "bird", 3: "cat",
+                       4: "deer", 5: "dog", 6: "frog", 7: "horse", 8: "ship", 9: "truck"}
 
 
-class VAE_WGAN(pl.LightningModule):
+class VAE_DFGAN(pl.LightningModule):
 
     def __init__(self, cfg):
         super().__init__()
@@ -84,14 +84,15 @@ class VAE_WGAN(pl.LightningModule):
         return optimizer
 
 
-class WGAN(pl.LightningModule):
+class DFGAN(pl.LightningModule):
 
-    def __init__(self, cfg, pretrained_encoder=None):
+    def __init__(self, cfg, pretrained_encoder=None, vqa_model=None):
         super().__init__()
         if type(cfg) is dict:
             cfg = edict(cfg)
         self.cfg = cfg
         self.save_hyperparameters(self.cfg)
+        self.vqa_model = vqa_model
 
         if pretrained_encoder:
             self.generator = pretrained_encoder
@@ -105,10 +106,10 @@ class WGAN(pl.LightningModule):
         self.inception = InceptionScore()
         self.real_acc = pl.metrics.Accuracy()
         self.fake_acc = pl.metrics.Accuracy()
-
-        self.critic_iter = 5
-        self.lambda_term = 10
-        self.weight_cliping_limit = 0.01
+        if self.vqa_model:
+            self.vqa_model.eval()
+            self.train_vqa_acc = pl.metrics.Accuracy()
+            self.val_vqa_acc = pl.metrics.Accuracy()
       #  self.eval_y = None
 
     def forward(self, x, y=None):
@@ -125,61 +126,78 @@ class WGAN(pl.LightningModule):
         self.eval_text = batch["text"]
         batch_size = x.size(0)
 
-        one = torch.FloatTensor([1]).type_as(x)
-        mone = one * -1
-        # Train discriminator critic iter times per generator loop
-        if (batch_idx + 1) % self.critic_iter == 0:
-            # 3. Generator loss
-           # self.opt_d.zero_grad()
-            self.opt_g.zero_grad()
-            for p in self.discriminator.parameters():
-                p.requires_grad = False  # to avoid computation
-
-            noise = torch.randn(batch_size, 100).type_as(x)
-            fake_x = self.generator(noise, y)
-            fake_pred = self.discriminator(fake_x, y)
-            g_loss = fake_pred.mean()
-            #g_loss = - fake_pred.mean()
-            g_loss.backward()
-            g_cost = -g_loss
-            self.opt_g.step()
-            self.log("g_loss", g_cost, on_step=False, on_epoch=True, prog_bar=True)
-
-        for p in self.discriminator.parameters():
-            p.requires_grad = True
-        self.opt_d.zero_grad()
-
         # 1. Discriminator loss
 
         # Prediction on the real data
         real_pred = self.discriminator(x, y)
-        d_loss_real = real_pred.mean()
-        d_loss_real.backward()
+        d_acc_real = self.real_acc(real_pred, torch.ones(batch_size, 1).type_as(x))
+        d_loss_real = torch.nn.ReLU()(1.0 - real_pred).mean()
+     #   d_loss_real = F.binary_cross_entropy_with_logits(real_pred, real)
         # Prediction on the mismatched/wrong labeled data
-        # wrong_pred = self.discriminator(x, y.roll(1))
-        # d_loss_wrong = torch.nn.ReLU()(1.0 + wrong_pred).mean()
+        wrong_pred = self.discriminator(x, y.roll(1))
+        d_loss_wrong = torch.nn.ReLU()(1.0 + wrong_pred).mean()
+       # d_loss_wrong = F.binary_cross_entropy_with_logits(wrong_pred, fake)
         # Forward pass
         noise = torch.randn(batch_size, 100).type_as(x)
         fake_x = self.generator(noise, y)
 
         # Prediction on the generated images
         fake_pred = self.discriminator(fake_x.detach(), y)
-        d_loss_fake = fake_pred.mean()
-        d_loss_fake.backward()
+        d_acc_fake = self.fake_acc(fake_pred, torch.zeros(batch_size, 1).type_as(x))
+        d_loss_fake = torch.nn.ReLU()(1.0 + fake_pred).mean()
+        #d_loss_fake = F.binary_cross_entropy_with_logits(fake_pred, fake)
 
-        gradient_penalty = self.calculate_gradient_penalty(x, y)
-        gradient_penalty.backward()
-        d_loss = d_loss_fake - d_loss_real
-     #   d_loss = d_loss_fake - d_loss_real + gradient_penalty
-        Wasserstein_D = d_loss_real - d_loss_fake
+        d_loss = d_loss_real + (d_loss_fake + d_loss_wrong) / 2.0
+        self.opt_d.zero_grad()
+        self.opt_g.zero_grad()
+        self.manual_backward(d_loss, self.opt_d)
        # self.manual_optimizer_step(self.opt_d)
         self.opt_d.step()
-
         self.log("d_loss_real", d_loss_real, on_step=False, on_epoch=True)
         self.log("d_loss_fake", d_loss_fake, on_step=False, on_epoch=True)
-       # self.log("d_loss_wrong", d_loss_wrong, on_step=False, on_epoch=True)
+        self.log("d_loss_wrong", d_loss_wrong, on_step=False, on_epoch=True)
         self.log("d_loss", d_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("wasserstein_d", Wasserstein_D, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("d_acc_real", d_acc_real, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("d_acc_fake", d_acc_fake, on_step=False, on_epoch=True, prog_bar=True)
+
+        # 2. Matching aware gradient penalty on the discriminator
+        interpolated = x.requires_grad_()
+        sent_inter = y.requires_grad_()
+        out = self.discriminator(x, y)
+        grads = torch.autograd.grad(outputs=out,
+                                    inputs=(interpolated, sent_inter),
+                                    grad_outputs=torch.ones(out.size()).type_as(x),
+                                    retain_graph=True,
+                                    create_graph=True,
+                                    only_inputs=True)
+        grad0 = grads[0].view(grads[0].size(0), -1)
+        grad1 = grads[1].view(grads[1].size(0), -1)
+        grad = torch.cat((grad0, grad1), dim=1)
+        grad_l2norm = torch.sqrt(torch.sum(grad ** 2, dim=1))
+        d_loss_gp = torch.mean((grad_l2norm) ** 6) * 2
+        self.opt_d.zero_grad()
+        self.opt_g.zero_grad()
+        self.manual_backward(d_loss_gp, self.opt_d)
+       # self.manual_optimizer_step(self.opt_d)
+        self.opt_d.step()
+        self.log("d_loss_gp", d_loss_gp, on_step=False, on_epoch=True)
+
+        # 3. Generator loss
+        fake_pred = self.discriminator(fake_x, y)
+        g_loss = - fake_pred.mean()
+    #    g_loss = F.binary_cross_entropy_with_logits(fake_pred, real)
+        self.opt_g.zero_grad()
+        self.opt_d.zero_grad()
+        self.manual_backward(g_loss, self.opt_g)
+     #   self.manual_optimizer_step(self.opt_g)
+        self.opt_g.step()
+        self.log("g_loss", g_loss, on_step=False, on_epoch=True, prog_bar=True)
+
+        if self.vqa_model:
+            with torch.no_grad():
+                vqa_pred = self.vqa_model(fake_x, batch["q_embedding"])
+                self.train_vqa_acc(vqa_pred, batch["target"])
+                self.log('train_vqa_acc', self.train_vqa_acc, on_step=False, on_epoch=True)
 
     def validation_step(self, batch, batch_idx):
         x = batch["img"]
@@ -195,6 +213,11 @@ class WGAN(pl.LightningModule):
 
         self.log("Inception score (val)", incep_mean, on_step=False, on_epoch=True)
 
+        if self.vqa_model:
+            with torch.no_grad():
+                vqa_pred = self.vqa_model(fake_x, batch["q_embedding"])
+                self.val_vqa_acc(vqa_pred, batch["target"])
+                self.log('val_vqa_acc', self.val_vqa_acc, on_step=False, on_epoch=True, prog_bar=True)
         if not self.trainer.running_sanity_check and batch_idx == 0:
             grid = gen_image_grid(fake_x, batch["text"])
            # grid = torchvision.utils.make_grid(fake_x, normalize=True)
@@ -230,10 +253,9 @@ class WGAN(pl.LightningModule):
 
     def configure_optimizers(self):
         opt_g = torch.optim.Adam(self.generator.parameters(),
-                                 lr=self.cfg.TRAIN.G_LR, betas=(0.0, 0.999))
+                                 lr=self.cfg.TRAIN.G_LR, betas=(0, 0.999))
         opt_d = torch.optim.Adam(self.discriminator.parameters(),
-                                 lr=self.cfg.TRAIN.D_LR, betas=(0.0, 0.999))
-
+                                 lr=self.cfg.TRAIN.D_LR, betas=(0, 0.999))
         return opt_g, opt_d
 
     def get_progress_bar_dict(self):
@@ -241,38 +263,3 @@ class WGAN(pl.LightningModule):
         items = super().get_progress_bar_dict()
         items.pop("loss", None)
         return items
-
-    # def calculate_gradient_penalty(self, x, y):
-    #     interpolated = x.requires_grad_()
-    #     sent_inter = y.requires_grad_()
-    #     out = self.discriminator(x, y)
-    #     grads = torch.autograd.grad(outputs=out,
-    #                                 inputs=(interpolated, sent_inter),
-    #                                 grad_outputs=torch.ones(out.size()).type_as(x),
-    #                                 retain_graph=True,
-    #                                 create_graph=True,
-    #                                 only_inputs=True)
-    #     grad0 = grads[0].view(grads[0].size(0), -1)
-    #     grad1 = grads[1].view(grads[1].size(0), -1)
-    #     grad = torch.cat((grad0, grad1), dim=1)
-    #     grad_l2norm = torch.sqrt(torch.sum(grad ** 2, dim=1))
-    #     grad_penalty = torch.mean((grad_l2norm) ** 6) * 2
-    #     return grad_penalty
-
-    def calculate_gradient_penalty(self, x, y):
-        interpolated = x.requires_grad_()
-        sent_inter = y.requires_grad_()
-        out = self.discriminator(x, y)
-        grads = torch.autograd.grad(outputs=out,
-                                    inputs=(interpolated, sent_inter),
-                                    grad_outputs=torch.ones(out.size()).type_as(x),
-                                    retain_graph=True,
-                                    create_graph=True,
-                                    only_inputs=True)
-        grad0 = grads[0].view(grads[0].size(0), -1)
-        grad1 = grads[1].view(grads[1].size(0), -1)
-        grad = torch.cat((grad0, grad1), dim=1)
-        grad_l2norm = torch.sqrt(torch.sum(grad ** 2, dim=1))
-        d_loss_gp = torch.mean((grad_l2norm) ** 6) * 2
-
-        return d_loss_gp

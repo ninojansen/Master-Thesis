@@ -1,67 +1,34 @@
-from __future__ import division
-from __future__ import print_function
-
-import os.path as osp
 import numpy as np
 from easydict import EasyDict as edict
-
 
 __C = edict()
 cfg = __C
 
 # Dataset name: flowers, birds
-__C.DATASET_NAME = 'birds'
+__C.DATASET_NAME = 'easyvqa'
 __C.CONFIG_NAME = ''
 __C.DATA_DIR = ''
-__C.GPU_ID = 0
-__C.CUDA = True
-__C.WORKERS = 6
-
-__C.RNN_TYPE = 'LSTM'   # 'GRU'
-__C.B_VALIDATION = False
-__C.loss = 'hinge'
-__C.TREE = edict()
-__C.TREE.BRANCH_NUM = 3
-__C.TREE.BASE_SIZE = 64
-
+__C.IM_SIZE = 64
 
 # Training options
 __C.TRAIN = edict()
 __C.TRAIN.BATCH_SIZE = 64
-__C.TRAIN.MAX_EPOCH = 600
-__C.TRAIN.SNAPSHOT_INTERVAL = 2000
-__C.TRAIN.DISCRIMINATOR_LR = 2e-4
-__C.TRAIN.GENERATOR_LR = 2e-4
-__C.TRAIN.ENCODER_LR = 2e-4
-__C.TRAIN.RNN_GRAD_CLIP = 0.25
-__C.TRAIN.FLAG = True
-__C.TRAIN.NET_E = ''
-__C.TRAIN.NET_G = ''
-__C.TRAIN.B_NET_D = True
-__C.TRAIN.NF = 32
-__C.TRAIN.SMOOTH = edict()
-__C.TRAIN.SMOOTH.GAMMA1 = 5.0
-__C.TRAIN.SMOOTH.GAMMA3 = 10.0
-__C.TRAIN.SMOOTH.GAMMA2 = 5.0
-__C.TRAIN.SMOOTH.LAMBDA = 1.0
+__C.TRAIN.MAX_EPOCH = 601
+__C.TRAIN.VAE_LR = 0.0002
+__C.TRAIN.G_LR = 0.0002
+__C.TRAIN.D_LR = 0.0002
+__C.TRAIN.CHECKPOINT = ''
+__C.TRAIN.VAE_CHECKPOINT = ''
+__C.TRAIN.VQA_CHECKPOINT = ''
 
-
-# Modal options
-__C.GAN = edict()
-__C.GAN.DF_DIM = 64
-__C.GAN.GF_DIM = 128
-__C.GAN.Z_DIM = 100
-__C.GAN.CONDITION_DIM = 100
-__C.GAN.R_NUM = 2
-__C.GAN.B_ATTENTION = True
-__C.GAN.B_DCGAN = True
-
-
-__C.TEXT = edict()
-__C.TEXT.CAPTIONS_PER_IMAGE = 10
-__C.TEXT.EMBEDDING_DIM = 256
-__C.TEXT.WORDS_NUM = 18
-__C.TEXT.DAMSM_NAME = '../DAMSMencoders/coco/text_encoder200.pth'
+__C.MODEL = edict()
+__C.MODEL.NF = 8
+__C.MODEL.Z_DIM = 100
+__C.MODEL.EF_DIM = 10
+__C.MODEL.EF_TYPE = "sbert"
+__C.MODEL.GAN = "DFGAN"
+__C.TEST = edict()
+__C.TEST.CHECKPOINT = ''
 
 
 def _merge_a_into_b(a, b):
@@ -101,6 +68,6 @@ def cfg_from_file(filename):
     """Load a config file and merge it into the default options."""
     import yaml
     with open(filename, 'r') as f:
-        yaml_cfg = edict(yaml.load(f))
+        yaml_cfg = edict(yaml.safe_load(f))
 
     _merge_a_into_b(yaml_cfg, __C)
