@@ -190,14 +190,17 @@ class DFGAN(pl.LightningModule):
         self.opt_d.zero_grad()
         self.manual_backward(g_loss, self.opt_g)
      #   self.manual_optimizer_step(self.opt_g)
-        self.opt_g.step()
-        self.log("g_loss", g_loss, on_step=False, on_epoch=True, prog_bar=True)
 
         if self.vqa_model:
             with torch.no_grad():
                 vqa_pred = self.vqa_model(fake_x, batch["q_embedding"])
-                self.train_vqa_acc(vqa_pred, batch["target"])
-                self.log('train_vqa_acc', self.train_vqa_acc, on_step=False, on_epoch=True)
+            vqa_loss = F.cross_entropy(vqa_pred, batch["target"])
+          #  self.manual_backward(vqa_loss, self.opt_g)
+            self.train_vqa_acc(vqa_pred, batch["target"])
+            self.log('train_vqa_acc', self.train_vqa_acc, on_step=False, on_epoch=True)
+
+        self.opt_g.step()
+        self.log("g_loss", g_loss, on_step=False, on_epoch=True, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
         x = batch["img"]

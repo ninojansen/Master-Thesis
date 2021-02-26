@@ -3,6 +3,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
 from architecture.datasets.easy_vqa import EasyVQADataModule
+from architecture.datasets.abstractVQA import AbstractVQADataModule
 from architecture.datasets.cub200 import CUB200DataModule
 from architecture.visual_question_answering.config import cfg, cfg_from_file
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -21,7 +22,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a DAMSM network')
     parser.add_argument('--cfg', dest='cfg_file',
                         help='optional config file',
-                        default='cfg/easyVQA/ext_sbert.yml', type=str)
+                        default='cfg/abstractVQA/sbert.yml', type=str)
     parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
     parser.add_argument('--test', dest='test', action="store_true", default=False)
@@ -71,6 +72,15 @@ if __name__ == "__main__":
         datamodule = EasyVQADataModule(
             data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers,
             pretrained_images=False, pretrained_text=True, text_embed_type=cfg.MODEL.EF_TYPE)
+    if cfg.DATASET_NAME == "abstract_vqa":
+        norm = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])])
+        datamodule = AbstractVQADataModule(
+            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers, im_size=cfg.IM_SIZE,
+            text_embed_type=cfg.MODEL.EF_TYPE)
+
     cfg.MODEL.EF_DIM = datamodule.get_ef_dim(combined=False)
     cfg.MODEL.N_ANSWERS = len(datamodule.get_answer_map())
 

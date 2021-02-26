@@ -17,6 +17,7 @@ from tqdm import tqdm
 import pickle
 from torchvision import datasets, models, transforms
 from torch import nn
+import shutil
 
 
 class ImageEmbeddingGenerator():
@@ -25,16 +26,16 @@ class ImageEmbeddingGenerator():
         if model_name == "vgg16":
             self.model = models.vgg16(pretrained=True)
             self.model.classifier = nn.Sequential(*list(self.model.classifier.children())[:-3])
-            self.extension = "vgg16_features"
+            self.extension = "vgg16"
 
-    def generate_embeddings(self, iterator_list, outdir):
+    def generate_embeddings(self, dataloader, outdir):
         self.model.eval()
-        if not os.path.isdir(os.path.join(outdir, "img_embeddings")):
-            os.mkdir(os.path.join(outdir, "img_embeddings"))
-        for iterator in iterator_list:
-            for batch in tqdm(iterator):
-                with torch.no_grad():
-                    features = self.model(batch["img"])
-
-                for i, key in enumerate(batch["key"]):
-                    np.save(os.path.join(outdir, "img_embeddings", f"{key}_{self.extension}.npy"), features[i])
+        outdir = os.path.join(outdir, 'embeddings', self.extension)
+        if os.path.exists(outdir):
+            shutil.rmtree(outdir)
+        os.makedirs(outdir)
+        for batch in tqdm(dataloader):
+            with torch.no_grad():
+                features = self.model(batch["img"])
+            for i, path in enumerate(batch["img_path"]):
+                np.save(os.path.join(outdir, path.replace(".png", f"_{self.extension}.npy")), features[i])

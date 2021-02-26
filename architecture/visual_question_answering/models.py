@@ -44,6 +44,28 @@ class SimpleVQA(nn.Module):
         return z
 
 
+class AbstractVQA(nn.Module):
+    def __init__(self, ef_dim, n_answers, im_dim=None):
+        super(AbstractVQA, self).__init__()
+        self.n_answers = n_answers
+        self.pretrained_img = pretrained_img
+        self.im_dim = im_dim
+        self.fc1 = nn.Linear(im_dim, 32)
+        self.question = nn.Sequential(nn.Linear(ef_dim, 32), nn.ReLU(), nn.Linear(32, 32), nn.ReLU())
+
+        self.out = nn.Sequential(nn.Linear(32, 32), nn.ReLU(), nn.Linear(32, n_answers))
+
+    def forward(self, x, y):
+        x = F.relu(self.fc1(x))
+
+        y = self.question(y)
+
+        z = x * y
+
+        z = self.out(z)
+        return z
+
+
 if __name__ == "__main__":
     model = SimpleVQA(64, 34, 13)
     print(model)
