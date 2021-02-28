@@ -149,7 +149,7 @@ class DataGenerator:
             (f'what is the color of the shape?', color_name),
             # Size questions
             (f"what is the size of the {color_name} shape?", size_name),
-            (f"what is size is the shape?", size_name),
+            (f"what size is the shape?", size_name),
             (f"how large is the shape?", size_name),
             (f"what size is the shape in the image?", size_name),
             (f"what size can the shape be considered?", size_name),
@@ -169,11 +169,11 @@ class DataGenerator:
             yes_no_questions.append((f'does the image contain a {cur_shape_name}?', pos_answer))
             yes_no_questions.append((f'is a {cur_shape_name} present?', pos_answer))
 
-            neg_answer = 'no' if s is shape else 'yes'
-            yes_no_questions.append((f'is there not a {cur_shape_name}?', neg_answer))
-            yes_no_questions.append((f'is there not a {cur_shape_name} in the image?', neg_answer))
-            yes_no_questions.append((f'does the image not contain a {cur_shape_name}?', neg_answer))
-            yes_no_questions.append((f'is no {cur_shape_name} present?', neg_answer))
+            # neg_answer = 'no' if s is shape else 'yes'
+            # yes_no_questions.append((f'is there not a {cur_shape_name}?', neg_answer))
+            # yes_no_questions.append((f'is there not a {cur_shape_name} in the image?', neg_answer))
+            # yes_no_questions.append((f'does the image not contain a {cur_shape_name}?', neg_answer))
+            # yes_no_questions.append((f'is no {cur_shape_name} present?', neg_answer))
 
         for c in Color:
             cur_color_name = c.name.lower().replace("_", " ")
@@ -183,39 +183,39 @@ class DataGenerator:
             yes_no_questions.append((f'does the image contain a {cur_color_name} shape?', pos_answer))
             yes_no_questions.append((f'is a {cur_color_name} shape present?', pos_answer))
 
-            neg_answer = 'no' if c is color else 'yes'
-            yes_no_questions.append((f'is there not a {cur_color_name} shape?', neg_answer))
-            yes_no_questions.append((f'is there not a {cur_color_name} shape in the image?', neg_answer))
-            yes_no_questions.append((f'does the image not contain a {cur_color_name} shape?', neg_answer))
-            yes_no_questions.append((f'is no {cur_color_name} shape present?', neg_answer))
+            # neg_answer = 'no' if c is color else 'yes'
+            # yes_no_questions.append((f'is there not a {cur_color_name} shape?', neg_answer))
+            # yes_no_questions.append((f'is there not a {cur_color_name} shape in the image?', neg_answer))
+            # yes_no_questions.append((f'does the image not contain a {cur_color_name} shape?', neg_answer))
+            # yes_no_questions.append((f'is no {cur_color_name} shape present?', neg_answer))
 
         for s in Size:
             cur_size_name = s.name.lower()
             pos_answer = 'yes' if s is size else 'no'
             yes_no_questions.append((f'is there a {cur_size_name} sized shape?', pos_answer))
-            yes_no_questions.append((f'is there a {cur_size_name} in the image?', pos_answer))
+            yes_no_questions.append((f'is there a {cur_size_name} shape in the image?', pos_answer))
             yes_no_questions.append((f'does the image contain a {cur_size_name} shape?', pos_answer))
             yes_no_questions.append((f'is a {cur_shape_name} shape present?', pos_answer))
 
-            neg_answer = 'no' if s is size else 'yes'
-            yes_no_questions.append((f'is there not a {cur_size_name} sized shape?', neg_answer))
-            yes_no_questions.append((f'is there not a {cur_size_name} in the image?', neg_answer))
-            yes_no_questions.append((f'does the image not contain a {cur_size_name} shape?', neg_answer))
-            yes_no_questions.append((f'is no {cur_shape_name} shape present?', neg_answer))
+            # neg_answer = 'no' if s is size else 'yes'
+            # yes_no_questions.append((f'is there not a {cur_size_name} sized shape?', neg_answer))
+            # yes_no_questions.append((f'is there not a {cur_size_name} in the image?', neg_answer))
+            # yes_no_questions.append((f'does the image not contain a {cur_size_name} shape?', neg_answer))
+            # yes_no_questions.append((f'is no {cur_shape_name} shape present?', neg_answer))
 
         for l in Location:
-            cur_loc_name = l.name.lower()
+            cur_loc_name = l.name.lower().replace("_", " ")
             pos_answer = 'yes' if s is location else 'no'
             yes_no_questions.append((f'is there a shape located in the {cur_loc_name}?', pos_answer))
             yes_no_questions.append((f'is the shape located in the {cur_loc_name}?', pos_answer))
             yes_no_questions.append((f'does the image contain a shape located in the {cur_loc_name}?', pos_answer))
             yes_no_questions.append((f'is a shape present in the {cur_loc_name}?', pos_answer))
 
-            neg_answer = 'no' if s is location else 'yes'
-            yes_no_questions.append((f'is there not a shape located in the {cur_loc_name}?', neg_answer))
-            yes_no_questions.append((f'is the shape not located in the {cur_loc_name}?', neg_answer))
-            yes_no_questions.append((f'does the image not contain a shape located in the {cur_loc_name}?', neg_answer))
-            yes_no_questions.append((f'is no shape present in the {cur_loc_name}?', neg_answer))
+            # neg_answer = 'no' if s is location else 'yes'
+            # yes_no_questions.append((f'is there not a shape located in the {cur_loc_name}?', neg_answer))
+            # yes_no_questions.append((f'is the shape not located in the {cur_loc_name}?', neg_answer))
+            # yes_no_questions.append((f'does the image not contain a shape located in the {cur_loc_name}?', neg_answer))
+            # yes_no_questions.append((f'is no shape present in the {cur_loc_name}?', neg_answer))
         questions = list(filter(lambda _: randint(0, 99) < 32, questions))
         yes_no_questions = list(filter(lambda _: randint(0, 99) < 8, yes_no_questions))
 

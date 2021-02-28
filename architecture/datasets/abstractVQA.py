@@ -283,7 +283,7 @@ class AbstractVQADataset(data.Dataset):
 
 if __name__ == "__main__":
     data_dir = "/home/nino/Documents/Datasets/AbstractVQA"
-    datamodule = AbstractVQADataModule(data_dir=data_dir, im_size=64)
+    datamodule = AbstractVQADataModule(data_dir=data_dir, im_size=64,)
     datamodule.generate_image_embeddings()
     # datamodule.generate_text_embeds(type="bow")
     # datamodule.generate_text_embeds(type="sbert")
