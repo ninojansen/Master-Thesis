@@ -11,9 +11,10 @@ from torch.optim import optimizer
 import torchvision
 import time
 from architecture.utils.inception_score import InceptionScore
-from architecture.visual_question_answering.models import SimpleVQA
+from architecture.visual_question_answering.models import SimpleVQA, PretrainedVQA
 from easydict import EasyDict as edict
 from architecture.utils.utils import weights_init
+from torchvision import datasets, models, transforms
 
 
 class VQA(pl.LightningModule):
@@ -26,9 +27,17 @@ class VQA(pl.LightningModule):
         self.save_hyperparameters(self.cfg)
         self.lr = cfg.TRAIN.LR
 
-        self.model = SimpleVQA(64, self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
-                               pretrained_img=False, im_dim=self.cfg.MODEL.IM_DIM, )
+        self.model = PretrainedVQA(self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
+                                   self.cfg.MODEL.N_HIDDEN, im_dim=self.cfg.MODEL.IM_DIM, )
+
         self.model.apply(weights_init)
+        self.vgg16_model = models.vgg16(pretrained=True)
+        self.vgg16_model.classifier = nn.Sequential(*list(self.vgg16_model.classifier.children())[:-3])
+        self.vgg16_transform = transforms.Compose([
+            transforms.Resize(224),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])])
+
         self.start = time.perf_counter()
         self.train_acc = pl.metrics.Accuracy()
         self.valid_acc = pl.metrics.Accuracy()
@@ -44,7 +53,7 @@ class VQA(pl.LightningModule):
       #  (opt_g, opt_d) = self.optimizers()
      #   self.opt.zero_grad()
         #y_pred = self(batch["img_embedding"], batch["q_embedding"])
-        y_pred = self(batch["img"], batch["q_embedding"])
+        y_pred = self(batch["img_embedding"], batch["q_embedding"])
         loss = self.criterion(y_pred, batch["target"])
       #  loss.backward()
        # self.opt.step()
@@ -55,14 +64,14 @@ class VQA(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
        # y_pred = self(batch["img_embedding"], batch["q_embedding"])
-        y_pred = self(batch["img"], batch["q_embedding"])
+        y_pred = self(batch["img_embedding"], batch["q_embedding"])
 
         self.valid_acc(y_pred, batch["target"])
         self.log('val_acc', self.valid_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
       #  y_pred = self(batch["img_embedding"], batch["q_embedding"])
-        y_pred = self(batch["img"], batch["q_embedding"])
+        y_pred = self(batch["img_embedding"], batch["q_embedding"])
 
         self.test_acc(y_pred, batch["target"])
         self.log('test_acc', self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
@@ -74,9 +83,14 @@ class VQA(pl.LightningModule):
             f"\nEpoch {self.current_epoch} finished in {round(elapsed_time, 2)}s")
 
     def configure_optimizers(self):
-        opt = torch.optim.Adam(self.parameters(), lr=self.lr, eps=1e-07)
+        opt = torch.optim.Adam(self.model.parameters(), lr=self.lr, eps=1e-07)
       #  opt = torch.optim.SGD(self.parameters(), lr=0.001, momentum=0.9)
         return opt
+
+    def preprocess_vgg16(self, img):
+        self.vgg16_model.eval()
+        with torch.no_grad():
+            return self.vgg16_model(self.vgg16_transform(img))
 
     def get_progress_bar_dict(self):
         # don't show the version number

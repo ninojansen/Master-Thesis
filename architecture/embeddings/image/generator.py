@@ -38,4 +38,4 @@ class ImageEmbeddingGenerator():
             with torch.no_grad():
                 features = self.model(batch["img"])
             for i, path in enumerate(batch["img_path"]):
-                np.save(os.path.join(outdir, path.replace(".png", f"_{self.extension}.npy")), features[i])
+                np.save(os.path.join(outdir, path.replace(".png", ".npy")), features[i])

@@ -14,6 +14,7 @@ __C.TRAIN = edict()
 __C.TRAIN.BATCH_SIZE = 64
 __C.TRAIN.MAX_EPOCH = 601
 __C.TRAIN.LR = 0.0002
+
 __C.TRAIN.CHECKPOINT = ''
 
 __C.MODEL = edict()
@@ -21,6 +22,7 @@ __C.MODEL.IM_DIM = 4096
 __C.MODEL.EF_DIM = 128
 __C.MODEL.EF_TYPE = "bow"
 __C.MODEL.N_ANSWERS = 12
+__C.MODEL.N_HIDDEN = 32
 __C.TEST = edict()
 __C.TEST.CHECKPOINT = ''
 

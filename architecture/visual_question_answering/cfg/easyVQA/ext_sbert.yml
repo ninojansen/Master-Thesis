@@ -6,7 +6,7 @@ DATA_DIR: "/home/nino/Documents/Datasets/ExtEasyVQA/"
 MODEL:
   IM_DIM: 4096
   EF_TYPE: "sbert"
-  N_ANSWERS: 13
+  N_HIDDEN: 1024
 
 TRAIN:
   BATCH_SIZE: 24 #default 24

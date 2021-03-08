@@ -44,22 +44,29 @@ class SimpleVQA(nn.Module):
         return z
 
 
-class AbstractVQA(nn.Module):
-    def __init__(self, ef_dim, n_answers, im_dim=None):
-        super(AbstractVQA, self).__init__()
+class PretrainedVQA(nn.Module):
+    def __init__(self, ef_dim, n_answers, n_hidden, l2_norm=True, im_dim=None):
+        super(PretrainedVQA, self).__init__()
         self.n_answers = n_answers
-        self.pretrained_img = pretrained_img
         self.im_dim = im_dim
-        self.fc1 = nn.Linear(im_dim, 32)
-        self.question = nn.Sequential(nn.Linear(ef_dim, 32), nn.ReLU(), nn.Linear(32, 32), nn.ReLU())
+        self.l2_norm = True
+        n_hidden = 32
+        self.fc1 = nn.Linear(im_dim, n_hidden)
+        self.question = nn.Sequential(nn.Linear(ef_dim, n_hidden), nn.ReLU())
+        self.out = nn.Sequential(
+            nn.Linear(n_hidden, n_hidden),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(n_hidden, n_answers))
 
-        self.out = nn.Sequential(nn.Linear(32, 32), nn.ReLU(), nn.Linear(32, n_answers))
+    def forward(self, img, question):
+        if self.l2_norm:
+            img = F.normalize(img, p=2, dim=1)
+        x = F.relu(self.fc1(img))
+     #   x = F.dropout(x, 0.5)
 
-    def forward(self, x, y):
-        x = F.relu(self.fc1(x))
-
-        y = self.question(y)
-
+        y = self.question(question)
+       # y =F.dropout(y, 0.5)
         z = x * y
 
         z = self.out(z)

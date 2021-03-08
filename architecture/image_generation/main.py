@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument('--gan', dest='gan', type=str, default=None)
     parser.add_argument('--type', dest='type', type=str, default="all")
     parser.add_argument('--test', dest='test', action="store_true", default=False)
-    parser.add_argument("--iterator", dest='iterator', type=str, default="img")
+    parser.add_argument("--iterator", dest='iterator', type=str, default="image")
     parser = pl.Trainer.add_argparse_args(parser)
     parser.set_defaults(gpus=-1)
     parser.set_defaults(max_epochs=None)

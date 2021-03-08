@@ -14,6 +14,11 @@ from tqdm import tqdm
 import math
 import copy
 
+# TODO
+# 1. Fix that no questions arent overepresent3ed
+# 2. Determine test question difficulty
+# 3. Add more variation to questions, spelling errors etc
+
 
 class DataGenerator:
     def __init__(self, data_dir, im_size, amount):
@@ -55,13 +60,12 @@ class DataGenerator:
 
     def create_img(self, attr):
         # attr(0)=Shape attr(1)=Color attr(2)=Size attr(3)=Location
-        arrn = np.random.normal(loc=255, scale=1, size=(self.IM_DRAW_SIZE, self.IM_DRAW_SIZE))
+        arrn = np.random.normal(loc=255, scale=10, size=(self.IM_DRAW_SIZE, self.IM_DRAW_SIZE))
         im = Image.fromarray(arrn)
         im = im.convert("RGB")
         draw = ImageDraw.Draw(im)
         self.draw_shape(draw, attr[0], attr[1], attr[2], attr[3])
         del draw
-
         im = im.resize((self.IM_SIZE, self.IM_SIZE), resample=Image.BILINEAR)
         return im
 
@@ -90,9 +94,9 @@ class DataGenerator:
         # print(len(train_split))
         # print(len(val_split))
         # print(len(test_split))
-        train_questions, num_train_yes_no = self.create_data(train_split, "train")
-        val_questions, num_val_yes_no = self.create_data(val_split, "val")
-        test_questions, num_test_yes_no = self.create_data(test_split, "test")
+        train_questions = self.create_data(train_split, "train")
+        val_questions = self.create_data(val_split, "val")
+        test_questions = self.create_data(test_split, "test")
 
         all_questions = train_questions + val_questions + test_questions
         all_answers = list(set(map(lambda q: q[1], all_questions)))
@@ -112,21 +116,20 @@ class DataGenerator:
         print(f'Generated {self.NUM_VAL} val images and {len(val_questions)} val questions.')
         print(f'Generated {self.NUM_TEST} test images and {len(test_questions)} test questions.')
         print(f'{len(all_answers)} total possible answers.')
-        print(f'{num_train_yes_no} training questions are yes/no.')
-        print(f'{num_test_yes_no} testing questions are yes/no.')
 
     def create_data(self, attributes, split):
         qs = []
-        num_yes_no = 0
         for i, attr in enumerate(tqdm(attributes)):
             img = self.create_img(attr)
-            img.save(os.path.join(self.data_dir, split, "images", f'{i}.png'), 'png')
-            new_qs, new_num_yes_no = self.create_questions(attr, i)
+            img.save(os.path.join(self.data_dir, split, "images", f'{split}_{i}.png'), 'png')
+            new_qs = self.create_questions(attr, i)
             qs += new_qs
-            num_yes_no += new_num_yes_no
-        return qs, num_yes_no
+        return qs
 
     def create_questions(self, attr, image_id):
+        # TODO
+        # Equal Yes/No
+        # More variation
         shape = attr[0]
         color = attr[1]
         size = attr[2]
@@ -159,15 +162,21 @@ class DataGenerator:
             (f"where can you find the shape in the image?", location_name),
             (f"where is the shape placed?", location_name)
         ]
-        yes_no_questions = []
 
+        yes_questions = []
+        no_questions = []
         for s in Shape:
             cur_shape_name = s.name.lower()
-            pos_answer = 'yes' if s is shape else 'no'
-            yes_no_questions.append((f'is there a {cur_shape_name}?', pos_answer))
-            yes_no_questions.append((f'is there a {cur_shape_name} in the image?', pos_answer))
-            yes_no_questions.append((f'does the image contain a {cur_shape_name}?', pos_answer))
-            yes_no_questions.append((f'is a {cur_shape_name} present?', pos_answer))
+            if s is shape:
+                pos_answer = 'yes'
+                res_list = yes_questions
+            else:
+                pos_answer = 'no'
+                res_list = no_questions
+            res_list.append((f'is there a {cur_shape_name}?', pos_answer))
+            res_list.append((f'is there a {cur_shape_name} in the image?', pos_answer))
+            res_list.append((f'does the image contain a {cur_shape_name}?', pos_answer))
+            res_list.append((f'is a {cur_shape_name} present?', pos_answer))
 
             # neg_answer = 'no' if s is shape else 'yes'
             # yes_no_questions.append((f'is there not a {cur_shape_name}?', neg_answer))
@@ -177,11 +186,16 @@ class DataGenerator:
 
         for c in Color:
             cur_color_name = c.name.lower().replace("_", " ")
-            pos_answer = 'yes' if c is color else 'no'
-            yes_no_questions.append((f'is there a {cur_color_name} shape?', pos_answer))
-            yes_no_questions.append((f'is there a {cur_color_name} shape in the image?', pos_answer))
-            yes_no_questions.append((f'does the image contain a {cur_color_name} shape?', pos_answer))
-            yes_no_questions.append((f'is a {cur_color_name} shape present?', pos_answer))
+            if s is color:
+                pos_answer = 'yes'
+                res_list = yes_questions
+            else:
+                pos_answer = 'no'
+                res_list = no_questions
+            res_list.append((f'is there a {cur_color_name} shape?', pos_answer))
+            res_list.append((f'is there a {cur_color_name} shape in the image?', pos_answer))
+            res_list.append((f'does the image contain a {cur_color_name} shape?', pos_answer))
+            res_list.append((f'is a {cur_color_name} shape present?', pos_answer))
 
             # neg_answer = 'no' if c is color else 'yes'
             # yes_no_questions.append((f'is there not a {cur_color_name} shape?', neg_answer))
@@ -191,11 +205,16 @@ class DataGenerator:
 
         for s in Size:
             cur_size_name = s.name.lower()
-            pos_answer = 'yes' if s is size else 'no'
-            yes_no_questions.append((f'is there a {cur_size_name} sized shape?', pos_answer))
-            yes_no_questions.append((f'is there a {cur_size_name} shape in the image?', pos_answer))
-            yes_no_questions.append((f'does the image contain a {cur_size_name} shape?', pos_answer))
-            yes_no_questions.append((f'is a {cur_shape_name} shape present?', pos_answer))
+            if s is size:
+                pos_answer = 'yes'
+                res_list = yes_questions
+            else:
+                pos_answer = 'no'
+                res_list = no_questions
+            res_list.append((f'is there a {cur_size_name} sized shape?', pos_answer))
+            res_list.append((f'is there a {cur_size_name} shape in the image?', pos_answer))
+            res_list.append((f'does the image contain a {cur_size_name} shape?', pos_answer))
+            res_list.append((f'is a {cur_shape_name} shape present?', pos_answer))
 
             # neg_answer = 'no' if s is size else 'yes'
             # yes_no_questions.append((f'is there not a {cur_size_name} sized shape?', neg_answer))
@@ -205,22 +224,27 @@ class DataGenerator:
 
         for l in Location:
             cur_loc_name = l.name.lower().replace("_", " ")
-            pos_answer = 'yes' if s is location else 'no'
-            yes_no_questions.append((f'is there a shape located in the {cur_loc_name}?', pos_answer))
-            yes_no_questions.append((f'is the shape located in the {cur_loc_name}?', pos_answer))
-            yes_no_questions.append((f'does the image contain a shape located in the {cur_loc_name}?', pos_answer))
-            yes_no_questions.append((f'is a shape present in the {cur_loc_name}?', pos_answer))
+            if s is location:
+                pos_answer = 'yes'
+                res_list = yes_questions
+            else:
+                pos_answer = 'no'
+                res_list = no_questions
+            res_list.append((f'is there a shape located in the {cur_loc_name}?', pos_answer))
+            res_list.append((f'is the shape located in the {cur_loc_name}?', pos_answer))
+            res_list.append((f'does the image contain a shape located in the {cur_loc_name}?', pos_answer))
+            res_list.append((f'is a shape present in the {cur_loc_name}?', pos_answer))
 
             # neg_answer = 'no' if s is location else 'yes'
             # yes_no_questions.append((f'is there not a shape located in the {cur_loc_name}?', neg_answer))
             # yes_no_questions.append((f'is the shape not located in the {cur_loc_name}?', neg_answer))
             # yes_no_questions.append((f'does the image not contain a shape located in the {cur_loc_name}?', neg_answer))
             # yes_no_questions.append((f'is no shape present in the {cur_loc_name}?', neg_answer))
-        questions = list(filter(lambda _: randint(0, 99) < 32, questions))
-        yes_no_questions = list(filter(lambda _: randint(0, 99) < 8, yes_no_questions))
 
+        questions = random.sample(questions, 6)
+        yes_no_questions = random.sample(yes_questions, 3) + random.sample(no_questions, 3)
         all_questions = questions + yes_no_questions
-        return (list(map(lambda x: x + (image_id,), all_questions)), len(yes_no_questions))
+        return list(map(lambda x: x + (image_id,), all_questions))
 
     def draw_shape(self, draw, shape, color, size, location):
      #   shape = Shape.TRIANGLE

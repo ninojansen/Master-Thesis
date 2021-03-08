@@ -192,10 +192,10 @@ class DFGAN(pl.LightningModule):
      #   self.manual_optimizer_step(self.opt_g)
 
         if self.vqa_model:
-            with torch.no_grad():
-                vqa_pred = self.vqa_model(fake_x, batch["q_embedding"])
-            vqa_loss = F.cross_entropy(vqa_pred, batch["target"])
-          #  self.manual_backward(vqa_loss, self.opt_g)
+            vqa_lambda = 0.1
+            vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_x), batch["q_embedding"])
+            vqa_loss = F.cross_entropy(vqa_pred, batch["target"]) * vqa_lambda
+            self.manual_backward(vqa_loss, self.opt_g)
             self.train_vqa_acc(vqa_pred, batch["target"])
             self.log('train_vqa_acc', self.train_vqa_acc, on_step=False, on_epoch=True)
 
@@ -218,7 +218,7 @@ class DFGAN(pl.LightningModule):
 
         if self.vqa_model:
             with torch.no_grad():
-                vqa_pred = self.vqa_model(fake_x, batch["q_embedding"])
+                vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_x), batch["q_embedding"])
                 self.val_vqa_acc(vqa_pred, batch["target"])
                 self.log('val_vqa_acc', self.val_vqa_acc, on_step=False, on_epoch=True, prog_bar=True)
         if not self.trainer.running_sanity_check and batch_idx == 0:
