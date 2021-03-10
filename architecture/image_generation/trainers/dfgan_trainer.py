@@ -203,10 +203,13 @@ class DFGAN(pl.LightningModule):
      #   self.manual_optimizer_step(self.opt_g)
 
         if self.vqa_model:
-            vqa_lambda = 0.1
-            vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_img), batch["q_embedding"])
-            vqa_loss = F.cross_entropy(vqa_pred, batch["target"]) * vqa_lambda
-            self.manual_backward(vqa_loss, self.opt_g)
+            if self.cfg.TRAIN.VQA_LAMBDA == 0:
+                with torch.no_grad():
+                    vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_img), batch["q_embedding"])
+            else:
+                vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_img), batch["q_embedding"])
+                vqa_loss = F.cross_entropy(vqa_pred, batch["target"]) * self.cfg.TRAIN.VQA_LAMBDA
+                self.manual_backward(vqa_loss, self.opt_g)
             self.train_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
             self.log('VQA/Train', self.train_vqa_acc, on_step=False, on_epoch=True)
 

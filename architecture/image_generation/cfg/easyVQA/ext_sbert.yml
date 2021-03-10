@@ -18,6 +18,7 @@ TRAIN:
   D_LR: 0.0002
   VAE_LR: 0.0002
   CHECKPOINT: ""
+  VQA_LAMBDA: 0.1
   VQA_CHECKPOINT: "/home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/ext_easy_vqa_sbert/ext_easy_vqa_sbert_10-03_13:47:51/checkpoints/epoch=7-step=21041.ckpt"
 
 TEST:

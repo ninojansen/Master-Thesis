@@ -33,11 +33,9 @@ class VQA(pl.LightningModule):
         self.model.apply(weights_init)
         self.vgg16_model = models.vgg16(pretrained=True)
         self.vgg16_model.classifier = nn.Sequential(*list(self.vgg16_model.classifier.children())[:-3])
-        self.vgg16_transform = transforms.Compose([
-            transforms.Resize(224),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])])
 
+        self.norm_mean = torch.as_tensor([0.485, 0.456, 0.406]).cuda()[None, :, None, None]
+        self.norm_std = torch.as_tensor([0.229, 0.224, 0.225]).cuda()[None, :, None, None]
         self.start = time.perf_counter()
         self.train_acc = pl.metrics.Accuracy()
         self.valid_acc = pl.metrics.Accuracy()
@@ -90,7 +88,13 @@ class VQA(pl.LightningModule):
     def preprocess_vgg16(self, img):
         self.vgg16_model.eval()
         with torch.no_grad():
-            return self.vgg16_model(self.vgg16_transform(img))
+            img = F.interpolate(img, size=224)
+            # Batched transforms.Normalize
+
+            img.sub_(self.norm_mean).div_(self.norm_std)
+            # img = torch.vmap(transforms.Normalize(mean=[0.485, 0.456, 0.406],
+            #                      std=[0.229, 0.224, 0.225]))
+            return self.vgg16_model(img)
 
     def get_progress_bar_dict(self):
         # don't show the version number
