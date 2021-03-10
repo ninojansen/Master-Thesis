@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
     parser.add_argument('--ckpt', dest='ckpt', type=str, default=None)
     parser.add_argument('--gan', dest='gan', type=str, default=None)
-    parser.add_argument('--type', dest='type', type=str, default="all")
+    parser.add_argument('--type', dest='type', type=str, default="no_pretrain")
     parser.add_argument('--test', dest='test', action="store_true", default=False)
     parser.add_argument("--iterator", dest='iterator', type=str, default="image")
     parser = pl.Trainer.add_argparse_args(parser)
@@ -50,15 +50,10 @@ if __name__ == "__main__":
 
     if args.gan:
         cfg.MODEL.GAN = args.gan
+    if args.num_workers:
+        cfg.N_WORKERS = args.num_workers
     print('Using config:')
     pprint.pprint(cfg)
-
-    if args.num_workers:
-        num_workers = args.num_workers
-    elif args.gpus == -1:
-        num_workers = 4 * torch.cuda.device_count()
-    else:
-        num_workers = 4 * args.gpus
 
     # --fast_dev_run // Does 1 batch and 1 epoch for quick
     # --precision 16 // for 16-bit precision
@@ -73,11 +68,11 @@ if __name__ == "__main__":
     datamodule = None
     if cfg.DATASET_NAME == "easy_vqa":
         datamodule = EasyVQADataModule(
-            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers, im_size=cfg.IM_SIZE,
+            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=cfg.N_WORKERS, im_size=cfg.IM_SIZE,
             pretrained_text=True, text_embed_type=cfg.MODEL.EF_TYPE, iterator=args.iterator)
     elif cfg.DATASET_NAME == "cifar10":
         datamodule = CIFAR10DataModule(data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE,
-                                       num_workers=num_workers)
+                                       num_workers=cfg.N_WORKERS)
 
         transform = transforms.Compose([
             transforms.ToTensor(),
@@ -131,7 +126,7 @@ if __name__ == "__main__":
             pretrained_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME,
                                                   version=f"{cfg.CONFIG_NAME}_pretrained_{version}")
             pretrained_trainer = pl.Trainer.from_argparse_args(
-                args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=pretrained_logger, automatic_optimization=False,
+                args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=pretrained_logger,
                 default_root_dir=args.output_dir)
 
             if cfg.MODEL.GAN == "DFGAN":
@@ -155,7 +150,7 @@ if __name__ == "__main__":
         full_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME,
                                         version=f"{cfg.CONFIG_NAME}_non_pretrained_{version}")
         full_trainer = pl.Trainer.from_argparse_args(
-            args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=full_logger, automatic_optimization=False,
+            args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=full_logger,
             default_root_dir=args.output_dir)
 
         if cfg.MODEL.GAN == "DFGAN":
@@ -170,6 +165,9 @@ if __name__ == "__main__":
 
         print(f"==============Training {cfg.CONFIG_NAME} model without pretraining==============")
         full_trainer.fit(full_model, datamodule)
+
+        print(f"==============Validating {cfg.CONFIG_NAME} model without pretraining==============")
+        full_trainer.test(test_dataloaders=datamodule.val_dataloader())
 
         if args.test:
             full_result = full_trainer.test(full_model)

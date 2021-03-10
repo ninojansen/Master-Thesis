@@ -41,8 +41,9 @@ class EasyVQADataModule(pl.LightningDataModule):
         self.iterator = iterator
 
         self.question_embeddings, self.answer_embeddings = self.load_embeddings()
-        if not os.path.exists(os.path.join(self.data_dir, 'train', 'embeddings')):
-            self.generate_image_embeddings()
+        if pretrained_images:
+            if not os.path.exists(os.path.join(self.data_dir, 'train', 'embeddings')):
+                self.generate_image_embeddings()
 
     def load_embeddings(self):
         question_embeddings = None
@@ -108,8 +109,8 @@ class EasyVQADataModule(pl.LightningDataModule):
         generator = TextEmbeddingGenerator()
         print(f"Generating {type} embeddings...")
 
-        #n_components = len(self.get_answer_map()) - 1
-        n_components = 1000
+        n_components = len(self.get_answer_map()) - 1
+       # n_components = 1000
         if type == "sbert":
             model = SentenceTransformer('distilbert-base-nli-mean-tokens')
             question_embeddings, question_dim = generator.generate_sbert_embeddings(

@@ -42,17 +42,11 @@ if __name__ == "__main__":
     if args.max_epochs:
         cfg.TRAIN.MAX_EPOCH = args.max_epochs
 
+    if args.num_workers:
+        cfg.N_WORKERS = args.num_workers
     print('Using config:')
     pprint.pprint(cfg)
 
-    if args.num_workers:
-        num_workers = args.num_workers
-    elif args.gpus == -1:
-        num_workers = 4 * torch.cuda.device_count()
-    else:
-        num_workers = 4 * args.gpus
-
-    num_workers = 1
     # --fast_dev_run // Does 1 batch and 1 epoch for quick
     # --precision 16 // for 16-bit precision
     # --progress_bar_refresh_rate 0  // Disable progress bar
@@ -70,7 +64,7 @@ if __name__ == "__main__":
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])])
         datamodule = EasyVQADataModule(
-            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers,
+            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=cfg.N_WORKERS,
             pretrained_images=True, pretrained_text=True, text_embed_type=cfg.MODEL.EF_TYPE)
     if cfg.DATASET_NAME == "abstract_vqa":
         norm = transforms.Compose([
@@ -78,7 +72,7 @@ if __name__ == "__main__":
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])])
         datamodule = AbstractVQADataModule(
-            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers, im_size=cfg.IM_SIZE,
+            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=cfg.N_WORKERS, im_size=cfg.IM_SIZE,
             text_embed_type=cfg.MODEL.EF_TYPE)
 
     cfg.MODEL.EF_DIM = datamodule.get_ef_dim(combined=False)
@@ -96,7 +90,8 @@ if __name__ == "__main__":
     print(f"==============Training {cfg.CONFIG_NAME} model==============")
    # trainer.tune(model, datamodule)
     trainer.fit(model, datamodule)
-    result = trainer.test(model)
 
+    print(f"==============Validating final {cfg.CONFIG_NAME} model==============")
+    result = trainer.test(model, test_dataloaders=datamodule.val_dataloader())
     print("Result:")
     print(result)

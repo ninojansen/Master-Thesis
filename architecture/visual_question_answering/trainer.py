@@ -57,24 +57,24 @@ class VQA(pl.LightningModule):
         loss = self.criterion(y_pred, batch["target"])
       #  loss.backward()
        # self.opt.step()
-        self.log("loss", loss, on_step=True, on_epoch=True, prog_bar=True)
-        self.train_acc(y_pred, batch["target"])
-        self.log('train_acc', self.train_acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("Loss/CrossEntropy", loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.train_acc(F.softmax(y_pred, dim=1), batch["target"])
+        self.log('Acc/Train', self.train_acc, on_step=False, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
        # y_pred = self(batch["img_embedding"], batch["q_embedding"])
         y_pred = self(batch["img_embedding"], batch["q_embedding"])
 
-        self.valid_acc(y_pred, batch["target"])
-        self.log('val_acc', self.valid_acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.valid_acc(F.softmax(y_pred, dim=1), batch["target"])
+        self.log('Acc/Val', self.valid_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
       #  y_pred = self(batch["img_embedding"], batch["q_embedding"])
         y_pred = self(batch["img_embedding"], batch["q_embedding"])
 
-        self.test_acc(y_pred, batch["target"])
-        self.log('test_acc', self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.test_acc(F.softmax(y_pred, dim=1), batch["target"])
+        self.log('Acc/Test', self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_epoch_end(self):
         elapsed_time = time.perf_counter() - self.start

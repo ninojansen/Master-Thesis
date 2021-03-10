@@ -2,11 +2,12 @@ CONFIG_NAME: "ext_easy_vqa_sbert"
 
 DATASET_NAME: "easy_vqa"
 DATA_DIR: "/home/nino/Documents/Datasets/ExtEasyVQA/"
+N_WORKERS: 12
 
 MODEL:
   IM_DIM: 4096
   EF_TYPE: "sbert"
-  N_HIDDEN: 1024
+  N_HIDDEN: 128
 
 TRAIN:
   BATCH_SIZE: 24 #default 24

@@ -8,9 +8,10 @@ import torch.nn.functional as F
 import torch
 import torchvision
 import time
+import numpy as np
 from architecture.utils.inception_score import InceptionScore
 from architecture.image_generation.models.dfgan_model import NetD, NetG
-from architecture.utils.utils import gen_image_grid, weights_init
+from architecture.utils.utils import gen_image_grid, weights_init, generate_figure
 from easydict import EasyDict as edict
 
 cifar10_label_names = {0: "airplane", 1: "automobile", 2: "bird", 3: "cat",
@@ -62,7 +63,9 @@ class VAE_DFGAN(pl.LightningModule):
         kl_loss = self.kl_loss(mu, logvar)
 
         loss = recon_loss + kl_loss
-        self.log('vae_loss', loss, on_step=True, on_epoch=True)
+        self.log('Loss/KL', kl_loss, on_step=False, on_epoch=True)
+        self.log('Loss/Recon', recon_loss, on_step=False, on_epoch=True)
+        self.log('Loss/VAE', loss, on_step=False, on_epoch=True)
         return loss
 
     def on_epoch_end(self):
@@ -76,7 +79,7 @@ class VAE_DFGAN(pl.LightningModule):
             recon_x = self.forward(noise, self.eval_y)
          #   grid = torchvision.utils.make_grid(recon_x, normalize=True)
             grid = gen_image_grid(recon_x.detach(), self.eval_text)
-            self.logger.experiment.add_image(f"Epoch {self.current_epoch}", grid, global_step=self.current_epoch)
+            self.logger.experiment.add_image(f"Train/Epoch_{self.current_epoch}", grid, global_step=self.current_epoch)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(),
@@ -88,6 +91,7 @@ class DFGAN(pl.LightningModule):
 
     def __init__(self, cfg, pretrained_encoder=None, vqa_model=None):
         super().__init__()
+        self.automatic_optimization = False
         if type(cfg) is dict:
             cfg = edict(cfg)
         self.cfg = cfg
@@ -102,6 +106,7 @@ class DFGAN(pl.LightningModule):
         self.discriminator = NetD(cfg.MODEL.NF, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=True)
         self.discriminator.apply(weights_init)
         self.opt_g, self.opt_d = self.configure_optimizers()
+
         self.start = time.perf_counter()
         self.inception = InceptionScore()
         self.real_acc = pl.metrics.Accuracy()
@@ -110,7 +115,7 @@ class DFGAN(pl.LightningModule):
             self.vqa_model.eval()
             self.train_vqa_acc = pl.metrics.Accuracy()
             self.val_vqa_acc = pl.metrics.Accuracy()
-      #  self.eval_y = None
+            self.test_vqa_acc = pl.metrics.Accuracy()
 
     def forward(self, x, y=None):
         # in lightning, forward defines the prediction/inference actions
@@ -119,31 +124,36 @@ class DFGAN(pl.LightningModule):
 
     def training_step(self, batch, batch_idx, optimizer_idx):
       #  (opt_g, opt_d) = self.optimizers()
+        real_img = batch["img"]
+        text_embed = batch["qa_embedding"]
 
-        x = batch["img"]
-        y = batch["qa_embedding"]
-        self.eval_y = y
+        self.eval_y = text_embed
         self.eval_text = batch["text"]
-        batch_size = x.size(0)
+
+        batch_size = real_img.size(0)
 
         # 1. Discriminator loss
 
         # Prediction on the real data
-        real_pred = self.discriminator(x, y)
-        d_acc_real = self.real_acc(real_pred, torch.ones(batch_size, 1).type_as(x))
+        real_pred = self.discriminator(real_img, text_embed)
+        d_acc_real = self.real_acc(
+            F.softmax(real_pred, dim=1),
+            torch.ones(batch_size, 1, dtype=torch.int32).cuda())
         d_loss_real = torch.nn.ReLU()(1.0 - real_pred).mean()
      #   d_loss_real = F.binary_cross_entropy_with_logits(real_pred, real)
         # Prediction on the mismatched/wrong labeled data
-        wrong_pred = self.discriminator(x, y.roll(1))
+        wrong_pred = self.discriminator(real_img, text_embed.roll(1))
         d_loss_wrong = torch.nn.ReLU()(1.0 + wrong_pred).mean()
        # d_loss_wrong = F.binary_cross_entropy_with_logits(wrong_pred, fake)
         # Forward pass
-        noise = torch.randn(batch_size, 100).type_as(x)
-        fake_x = self.generator(noise, y)
+        noise = torch.randn(batch_size, 100).type_as(real_img)
+        fake_img = self.generator(noise, text_embed)
 
         # Prediction on the generated images
-        fake_pred = self.discriminator(fake_x.detach(), y)
-        d_acc_fake = self.fake_acc(fake_pred, torch.zeros(batch_size, 1).type_as(x))
+        fake_pred = self.discriminator(fake_img.detach(), text_embed)
+        d_acc_fake = self.fake_acc(
+            F.softmax(fake_pred, dim=1),
+            torch.zeros(batch_size, dtype=torch.int32).cuda())
         d_loss_fake = torch.nn.ReLU()(1.0 + fake_pred).mean()
         #d_loss_fake = F.binary_cross_entropy_with_logits(fake_pred, fake)
 
@@ -153,20 +163,21 @@ class DFGAN(pl.LightningModule):
         self.manual_backward(d_loss, self.opt_d)
        # self.manual_optimizer_step(self.opt_d)
         self.opt_d.step()
-        self.log("d_loss_real", d_loss_real, on_step=False, on_epoch=True)
-        self.log("d_loss_fake", d_loss_fake, on_step=False, on_epoch=True)
-        self.log("d_loss_wrong", d_loss_wrong, on_step=False, on_epoch=True)
-        self.log("d_loss", d_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("d_acc_real", d_acc_real, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("d_acc_fake", d_acc_fake, on_step=False, on_epoch=True, prog_bar=True)
+
+        self.log("Loss/Real", d_loss_real, on_step=False, on_epoch=True)
+        self.log("Loss/Fake", d_loss_fake, on_step=False, on_epoch=True)
+        self.log("Loss/Wrong", d_loss_wrong, on_step=False, on_epoch=True)
+        self.log("Loss/Discriminator", d_loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("Acc/Real", d_acc_real, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("Acc/Fake", d_acc_fake, on_step=False, on_epoch=True, prog_bar=True)
 
         # 2. Matching aware gradient penalty on the discriminator
-        interpolated = x.requires_grad_()
-        sent_inter = y.requires_grad_()
-        out = self.discriminator(x, y)
+        interpolated = real_img.requires_grad_()
+        sent_inter = text_embed.requires_grad_()
+        out = self.discriminator(real_img, text_embed)
         grads = torch.autograd.grad(outputs=out,
                                     inputs=(interpolated, sent_inter),
-                                    grad_outputs=torch.ones(out.size()).type_as(x),
+                                    grad_outputs=torch.ones(out.size()).type_as(real_img),
                                     retain_graph=True,
                                     create_graph=True,
                                     only_inputs=True)
@@ -180,10 +191,10 @@ class DFGAN(pl.LightningModule):
         self.manual_backward(d_loss_gp, self.opt_d)
        # self.manual_optimizer_step(self.opt_d)
         self.opt_d.step()
-        self.log("d_loss_gp", d_loss_gp, on_step=False, on_epoch=True)
+        self.log("Loss/GradientPenalty", d_loss_gp, on_step=False, on_epoch=True)
 
         # 3. Generator loss
-        fake_pred = self.discriminator(fake_x, y)
+        fake_pred = self.discriminator(fake_img, text_embed)
         g_loss = - fake_pred.mean()
     #    g_loss = F.binary_cross_entropy_with_logits(fake_pred, real)
         self.opt_g.zero_grad()
@@ -193,53 +204,66 @@ class DFGAN(pl.LightningModule):
 
         if self.vqa_model:
             vqa_lambda = 0.1
-            vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_x), batch["q_embedding"])
+            vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_img), batch["q_embedding"])
             vqa_loss = F.cross_entropy(vqa_pred, batch["target"]) * vqa_lambda
             self.manual_backward(vqa_loss, self.opt_g)
-            self.train_vqa_acc(vqa_pred, batch["target"])
-            self.log('train_vqa_acc', self.train_vqa_acc, on_step=False, on_epoch=True)
+            self.train_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
+            self.log('VQA/Train', self.train_vqa_acc, on_step=False, on_epoch=True)
 
         self.opt_g.step()
-        self.log("g_loss", g_loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("Loss/Generator", g_loss, on_step=False, on_epoch=True, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
-        x = batch["img"]
-        y = batch["qa_embedding"]
+        text_embed = batch["qa_embedding"]
 
         batch_size = self.cfg.TRAIN.BATCH_SIZE
         # Generate images
-        z = torch.randn(batch_size, self.cfg.MODEL.Z_DIM).type_as(x)
+        noise = torch.randn(batch_size, self.cfg.MODEL.Z_DIM).type_as(text_embed)
 
-        fake_x = self.forward(z, y)
+        fake_img = self.forward(noise, text_embed)
 
-        incep_mean, incep_std = self.inception.compute_score(fake_x, num_splits=1)
+        incep_mean, incep_std = self.inception.compute_score(fake_img, num_splits=1)
 
-        self.log("Inception score (val)", incep_mean, on_step=False, on_epoch=True)
+        self.log("Inception/Val", incep_mean, on_step=False, on_epoch=True)
 
         if self.vqa_model:
             with torch.no_grad():
-                vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_x), batch["q_embedding"])
-                self.val_vqa_acc(vqa_pred, batch["target"])
-                self.log('val_vqa_acc', self.val_vqa_acc, on_step=False, on_epoch=True, prog_bar=True)
-        if not self.trainer.running_sanity_check and batch_idx == 0:
-            grid = gen_image_grid(fake_x, batch["text"])
-           # grid = torchvision.utils.make_grid(fake_x, normalize=True)
-            self.logger.experiment.add_image(f"Val epoch {self.current_epoch}",
-                                             grid, global_step=self.current_epoch)
+                vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_img), batch["q_embedding"])
+                self.val_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
+                self.log('VQA/Val', self.val_vqa_acc, on_step=False, on_epoch=True, prog_bar=True)
+        # if not self.trainer.running_sanity_check and batch_idx == 0:
+        #     grid = gen_image_grid(fake_img, batch["text"])
+        #    # grid = torchvision.utils.make_grid(fake_x, normalize=True)
+        #     self.logger.experiment.add_image(f"Val epoch {self.current_epoch}",
+        #                                      grid, global_step=self.current_epoch)
 
     def test_step(self, batch, batch_idx):
-        x = batch["img"]
-        y = batch["qa_embedding"]
-
+        text_embed = batch["qa_embedding"]
         batch_size = self.cfg.TRAIN.BATCH_SIZE
         # Generate images
-        z = torch.randn(batch_size, self.cfg.MODEL.Z_DIM).type_as(x)
+        noise = torch.randn(batch_size, self.cfg.MODEL.Z_DIM).type_as(text_embed)
 
-        fake_x = self.forward(z, y)
+        fake_img = self.forward(noise, text_embed)
 
-        incep_mean, incep_std = self.inception.compute_score(fake_x, num_splits=1)
+        incep_mean, incep_std = self.inception.compute_score(fake_img, num_splits=1)
 
-        self.log("Inception score (test)", incep_mean, on_step=False, on_epoch=True)
+        self.log("Inception/Test", incep_mean, on_step=False, on_epoch=True)
+
+        if self.vqa_model:
+            with torch.no_grad():
+                vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_img), batch["q_embedding"])
+                self.test_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
+                self.log('VQA/Test', self.test_vqa_acc, on_epoch=True, on_step=False)
+
+        val_images = []
+        for img, text in zip(fake_img, batch["text"]):
+            val_images.append(generate_figure(img, text))
+        self.logger.experiment.add_images(
+            f"Test/Batch_{batch_idx}", torch.stack(val_images),
+            global_step=self.current_epoch)
+        #    # grid = torchvision.utils.make_grid(fake_x, normalize=True)
+        #     self.logger.experiment.add_image(f"Val epoch {self.current_epoch}",
+        #                                      grid, global_step=self.current_epoch)
 
     def on_epoch_end(self):
         elapsed_time = time.perf_counter() - self.start
@@ -247,12 +271,12 @@ class DFGAN(pl.LightningModule):
         self.print(
             f"\nEpoch {self.current_epoch} finished in {round(elapsed_time, 2)}s")
 
-        if self.current_epoch % self.trainer.check_val_every_n_epoch == 0:
-            noise = torch.randn((self.eval_y.size(0), self.cfg.MODEL.Z_DIM)).type_as(self.eval_y)
-            recon_x = self.forward(noise, self.eval_y)
-            grid = gen_image_grid(recon_x, self.eval_text)
-          #  grid = torchvision.utils.make_grid(recon_x, normalize=True)
-            self.logger.experiment.add_image(f"Epoch {self.current_epoch}", grid, global_step=self.current_epoch)
+        # if self.current_epoch % self.trainer.check_val_every_n_epoch == 0:
+        #     noise = torch.randn((self.eval_y.size(0), self.cfg.MODEL.Z_DIM)).type_as(self.eval_y)
+        #     recon_x = self.forward(noise, self.eval_y)
+        #     grid = gen_image_grid(recon_x, self.eval_text)
+        #   #  grid = torchvision.utils.make_grid(recon_x, normalize=True)
+        #     self.logger.experiment.add_image(f"Epoch {self.current_epoch}", grid, global_step=self.current_epoch)
 
     def configure_optimizers(self):
         opt_g = torch.optim.Adam(self.generator.parameters(),

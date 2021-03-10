@@ -9,7 +9,7 @@ __C.DATASET_NAME = 'easyvqa'
 __C.CONFIG_NAME = ''
 __C.DATA_DIR = ''
 __C.IM_SIZE = 64
-
+__C.N_WORKERS = 4
 # Training options
 __C.TRAIN = edict()
 __C.TRAIN.BATCH_SIZE = 64

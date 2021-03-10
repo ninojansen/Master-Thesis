@@ -17,6 +17,32 @@ def weights_init(m):
             m.bias.data.fill_(0.0)
 
 
+def generate_figure(image, text):
+    image = image.clone()
+    min = float(image.min())
+    max = float(image.max())
+    image.clamp_(min=min, max=max)
+    image.add_(-min).div_(max - min + 1e-5)
+
+    processed_image = image.mul(255).add_(0.5).clamp_(
+        0, 255).permute(
+        1, 2, 0).to(
+        'cpu', torch.uint8).numpy()
+
+    plt.clf()
+    figure = plt.figure()
+    plt.imshow(processed_image)
+    plt.xlabel(text)
+
+    figure.canvas.draw()
+    buf = figure.canvas.tostring_rgb()
+    ncols, nrows = figure.canvas.get_width_height()
+    shape = (nrows, ncols, 3)
+    img_arr = np.fromstring(buf, dtype=np.uint8).reshape(shape)
+    plt.close("all")
+    return torch.from_numpy(img_arr).permute(2, 0, 1)
+
+
 def gen_image_grid(images_tensor, labels):
     # Create a figure to contain the plot.
     # ndarr = grid.mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy()

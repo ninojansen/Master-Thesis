@@ -2,15 +2,15 @@ CONFIG_NAME: "ext_easy_vqa_sbert"
 
 DATASET_NAME: "easy_vqa"
 DATA_DIR: "/home/nino/Documents/Datasets/ExtEasyVQA/"
-
+N_WORKERS: 12
 IM_SIZE: 64
 
 MODEL:
   NF: 32
   Z_DIM: 100
-  EF_DIM: 1536
   EF_TYPE: "sbert"
   GAN: "DFGAN"
+
 TRAIN:
   BATCH_SIZE: 24 #default 24
   MAX_EPOCH: 601
@@ -18,7 +18,7 @@ TRAIN:
   D_LR: 0.0002
   VAE_LR: 0.0002
   CHECKPOINT: ""
-  VQA_CHECKPOINT: "/home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/ext_easy_vqa_sbert/ext_easy_vqa_sbert_04-03_14:12:08/checkpoints/epoch=1-step=3678.ckpt"
+  VQA_CHECKPOINT: "/home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/ext_easy_vqa_sbert/ext_easy_vqa_sbert_10-03_13:47:51/checkpoints/epoch=7-step=21041.ckpt"
 
 TEST:
   CHECKPOINT: ""
