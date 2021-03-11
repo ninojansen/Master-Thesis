@@ -137,7 +137,7 @@ class DFGAN(pl.LightningModule):
         # Prediction on the real data
         real_pred = self.discriminator(real_img, text_embed)
         d_acc_real = self.real_acc(
-            F.softmax(real_pred, dim=1),
+            torch.sigmoid(real_pred),
             torch.ones(batch_size, 1, dtype=torch.int32).cuda())
         d_loss_real = torch.nn.ReLU()(1.0 - real_pred).mean()
      #   d_loss_real = F.binary_cross_entropy_with_logits(real_pred, real)
@@ -151,9 +151,8 @@ class DFGAN(pl.LightningModule):
 
         # Prediction on the generated images
         fake_pred = self.discriminator(fake_img.detach(), text_embed)
-        d_acc_fake = self.fake_acc(
-            F.softmax(fake_pred, dim=1),
-            torch.zeros(batch_size, dtype=torch.int32).cuda())
+        d_acc_fake = self.fake_acc(torch.sigmoid(fake_pred),
+                                   torch.zeros(batch_size, dtype=torch.int32).cuda())
         d_loss_fake = torch.nn.ReLU()(1.0 + fake_pred).mean()
         #d_loss_fake = F.binary_cross_entropy_with_logits(fake_pred, fake)
 
@@ -274,12 +273,17 @@ class DFGAN(pl.LightningModule):
         self.print(
             f"\nEpoch {self.current_epoch} finished in {round(elapsed_time, 2)}s")
 
-        # if self.current_epoch % self.trainer.check_val_every_n_epoch == 0:
-        #     noise = torch.randn((self.eval_y.size(0), self.cfg.MODEL.Z_DIM)).type_as(self.eval_y)
-        #     recon_x = self.forward(noise, self.eval_y)
-        #     grid = gen_image_grid(recon_x, self.eval_text)
-        #   #  grid = torchvision.utils.make_grid(recon_x, normalize=True)
-        #     self.logger.experiment.add_image(f"Epoch {self.current_epoch}", grid, global_step=self.current_epoch)
+        batch_size = self.cfg.TRAIN.BATCH_SIZE
+
+        if not self.trainer.running_sanity_check:
+            noise = torch.randn(batch_size, self.cfg.MODEL.Z_DIM).type_as(self.eval_y)
+            fake_img = self.forward(noise, self.eval_y)
+            val_images = []
+            for img, text in zip(fake_img, self.eval_text):
+                val_images.append(generate_figure(img, text))
+            self.logger.experiment.add_images(
+                f"Train/Epoch_{self.current_epoch}", torch.stack(val_images),
+                global_step=self.current_epoch)
 
     def configure_optimizers(self):
         opt_g = torch.optim.Adam(self.generator.parameters(),

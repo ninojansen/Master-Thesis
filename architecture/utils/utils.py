@@ -31,6 +31,7 @@ def generate_figure(image, text):
 
     plt.clf()
     figure = plt.figure()
+    plt.axis('off')
     plt.imshow(processed_image)
     plt.xlabel(text)
 
