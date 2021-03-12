@@ -2,6 +2,7 @@ from torch import nn
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
+from torchvision import transforms
 
 
 def weights_init(m):
@@ -19,6 +20,7 @@ def weights_init(m):
 
 def generate_figure(image, text):
     image = image.clone()
+    size = image.shape[2]
     min = float(image.min())
     max = float(image.max())
     image.clamp_(min=min, max=max)
@@ -31,17 +33,20 @@ def generate_figure(image, text):
 
     plt.clf()
     figure = plt.figure()
-    plt.axis('off')
+    plt.rcParams.update({'font.size': 20})
     plt.imshow(processed_image)
-    plt.xlabel(text)
-
+    plt.xticks([])
+    plt.yticks([])
+    plt.title(add_linebreaks(text, n_split=7))
+    plt.tight_layout()
     figure.canvas.draw()
     buf = figure.canvas.tostring_rgb()
     ncols, nrows = figure.canvas.get_width_height()
     shape = (nrows, ncols, 3)
     img_arr = np.fromstring(buf, dtype=np.uint8).reshape(shape)
     plt.close("all")
-    return torch.from_numpy(img_arr).permute(2, 0, 1)
+    resize = transforms.Resize(128)
+    return resize(torch.from_numpy(img_arr).permute(2, 0, 1))
 
 
 def gen_image_grid(images_tensor, labels):
@@ -86,6 +91,7 @@ def gen_image_grid(images_tensor, labels):
     #                      newshape=(int(figure.bbox.bounds[3]), int(figure.bbox.bounds[2]), -1))
     # io_buf.close()
     plt.close("all")
+
     return torch.from_numpy(img_arr).permute(2, 0, 1)
 
 
