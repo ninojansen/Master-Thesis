@@ -60,8 +60,7 @@ class VAE_DFGAN(pl.LightningModule):
             x.view(-1, self.cfg.IM_SIZE ** 2 * 3),
             reduction="sum")
 
-        kl_loss = self.kl_loss(mu, logvar)
-
+        kl_loss = self.kl_loss(mu, logvar) / x.view(-1, self.cfg.IM_SIZE ** 2 * 3).data.shape[0]
         loss = recon_loss + kl_loss
         self.log('Loss/KL', kl_loss, on_step=False, on_epoch=True)
         self.log('Loss/Recon', recon_loss, on_step=False, on_epoch=True)
@@ -74,15 +73,12 @@ class VAE_DFGAN(pl.LightningModule):
         self.print(
             f"\nEpoch {self.current_epoch} finished in {round(elapsed_time, 2)}s")
 
-        if not self.trainer.running_sanity_check:
-            noise = torch.randn(self.cfg.TRAIN.BATCH_SIZE, self.cfg.MODEL.Z_DIM).type_as(self.eval_y)
-            fake_img = self.forward(noise, self.eval_y)
-            val_images = []
-            for img, text in zip(fake_img, self.eval_text):
-                val_images.append(generate_figure(img, text))
-            self.logger.experiment.add_images(
-                f"Train/Epoch_{self.current_epoch}", torch.stack(val_images),
-                global_step=self.current_epoch)
+        if self.current_epoch % self.trainer.check_val_every_n_epoch == 0:
+            noise = torch.randn((self.eval_y.size(0), self.cfg.MODEL.Z_DIM)).type_as(self.eval_y)
+            recon_x = self.forward(noise, self.eval_y)
+         #   grid = torchvision.utils.make_grid(recon_x, normalize=True)
+            grid = gen_image_grid(recon_x.detach(), self.eval_text)
+            self.logger.experiment.add_image(f"Train/Epoch_{self.current_epoch}", grid, global_step=self.current_epoch)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(),
