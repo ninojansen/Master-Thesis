@@ -37,7 +37,7 @@ def generate_figure(image, text):
     plt.imshow(processed_image)
     plt.xticks([])
     plt.yticks([])
-    plt.title(add_linebreaks(text, n_split=7))
+    plt.title(add_linebreaks(text, n_split=5))
     plt.tight_layout()
     figure.canvas.draw()
     buf = figure.canvas.tostring_rgb()
@@ -46,7 +46,8 @@ def generate_figure(image, text):
     img_arr = np.fromstring(buf, dtype=np.uint8).reshape(shape)
     plt.close("all")
     resize = transforms.Resize(128)
-    return resize(torch.from_numpy(img_arr).permute(2, 0, 1))
+    out = transforms.Compose([transforms.ToPILImage(), transforms.Resize(128), transforms.ToTensor()])
+    return out(torch.from_numpy(img_arr).permute(2, 0, 1))
 
 
 def gen_image_grid(images_tensor, labels):
