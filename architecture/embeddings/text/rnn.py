@@ -43,6 +43,7 @@ class RNN_ENCODER(nn.Module):
                                self.nlayers, batch_first=True,
                                dropout=self.drop_prob,
                                bidirectional=self.bidirectional)
+
         elif self.rnn_type == 'GRU':
             self.rnn = nn.GRU(self.ninput, self.nhidden,
                               self.nlayers, batch_first=True,

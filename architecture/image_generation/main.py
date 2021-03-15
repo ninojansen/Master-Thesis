@@ -13,9 +13,8 @@ import pytorch_lightning as pl
 import pprint
 import argparse
 from pl_bolts.datamodules import CIFAR10DataModule
-from architecture.image_generation.trainers.dcgan_trainer import *
-from architecture.image_generation.trainers.dfgan_trainer import *
-from architecture.image_generation.trainers.wgan_trainer import *
+from architecture.image_generation.model import *
+from architecture.image_generation.trainer import *
 from datetime import datetime
 from architecture.visual_question_answering.trainer import VQA
 
@@ -107,10 +106,6 @@ if __name__ == "__main__":
 
         if cfg.MODEL.GAN == "DFGAN":
             vae_model = VAE_DFGAN(cfg)
-        elif cfg.MODEL.GAN == "WGAN":
-            vae_model = VAE_WGAN(cfg)
-        elif cfg.MODEL.GAN == "DCGAN":
-            vae_model = VAE(cfg)
         else:
             vae_model = None
             print(f"GAN model {cfg.MODEL.GAN} not supported.")
@@ -131,10 +126,6 @@ if __name__ == "__main__":
 
             if cfg.MODEL.GAN == "DFGAN":
                 pretrained_model = DFGAN(cfg, vae_model.decoder, vqa_model=vqa_model)
-            elif cfg.MODEL.GAN == "WGAN":
-                pretrained_model = WGAN(cfg, vae_model.decoder)
-            elif cfg.MODEL.GAN == "DCGAN":
-                pretrained_model = DCGAN(cfg, vae_model.decoder)
             else:
                 pretrained_model = None
                 print(f"GAN model {cfg.MODEL.GAN} not supported.")
@@ -155,10 +146,6 @@ if __name__ == "__main__":
 
         if cfg.MODEL.GAN == "DFGAN":
             full_model = DFGAN(cfg, vqa_model=vqa_model)
-        elif cfg.MODEL.GAN == "WGAN":
-            full_model = WGAN(cfg)
-        elif cfg.MODEL.GAN == "DCGAN":
-            full_model = DCGAN(cfg)
         else:
             full_model = None
             print(f"GAN model {cfg.MODEL.GAN} not supported.")

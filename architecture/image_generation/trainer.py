@@ -10,7 +10,7 @@ import torchvision
 import time
 import numpy as np
 from architecture.utils.inception_score import InceptionScore
-from architecture.image_generation.models.dfgan_model import NetD, NetG
+from architecture.image_generation.model import NetD, NetG
 from architecture.utils.utils import gen_image_grid, weights_init, generate_figure
 from easydict import EasyDict as edict
 
@@ -76,9 +76,12 @@ class VAE_DFGAN(pl.LightningModule):
         if self.current_epoch % self.trainer.check_val_every_n_epoch == 0:
             noise = torch.randn((self.eval_y.size(0), self.cfg.MODEL.Z_DIM)).type_as(self.eval_y)
             recon_x = self.forward(noise, self.eval_y)
-         #   grid = torchvision.utils.make_grid(recon_x, normalize=True)
-            grid = gen_image_grid(recon_x.detach(), self.eval_text)
-            self.logger.experiment.add_image(f"Train/Epoch_{self.current_epoch}", grid, global_step=self.current_epoch)
+            val_images = []
+            for img, text in zip(recon_x, self.eval_text):
+                val_images.append(generate_figure(img, text))
+            self.logger.experiment.add_images(
+                f"Train/Epoch_{self.current_epoch}", torch.stack(val_images),
+                global_step=self.current_epoch)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(),
