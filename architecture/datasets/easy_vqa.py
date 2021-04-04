@@ -5,7 +5,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath
 import json
 import math
 import random
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
@@ -27,7 +26,7 @@ class EasyVQADataModule(pl.LightningDataModule):
 
     def __init__(
             self, data_dir, batch_size=24, im_size=64, num_workers=4, pretrained_text=False,
-            pretrained_images=False, text_embed_type="sbert", iterator="question"):
+            cnn_type=None, text_embed_type="sbert", norm=None, iterator="question"):
         super().__init__()
         self.data_dir = data_dir
         self.im_size = im_size
@@ -35,15 +34,16 @@ class EasyVQADataModule(pl.LightningDataModule):
 
         self.num_workers = num_workers
         self.pretrained_text = pretrained_text
-        self.pretrained_images = pretrained_images
+        self.cnn_type = cnn_type
+#        self.pretrained_images = pretrained_images
 
         self.text_embed_type = text_embed_type
         self.iterator = iterator
+        self.norm = norm
 
         self.question_embeddings, self.answer_embeddings = self.load_embeddings()
-        if pretrained_images:
-            if not os.path.exists(os.path.join(self.data_dir, 'train', 'embeddings')):
-                self.generate_image_embeddings()
+        if cnn_type:
+            self.generate_image_embeddings()
 
     def load_embeddings(self):
         question_embeddings = None
@@ -52,7 +52,7 @@ class EasyVQADataModule(pl.LightningDataModule):
             self.generate_text_embeds(self.text_embed_type)
         with open(os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl'), "rb") as fIn:
             print(
-                f"Loading embeddings from {os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl')}")
+                f"Loading question embeddings from {os.path.join(self.data_dir, f'{self.text_embed_type}_question_embeddings.pkl')}")
             question_embeddings = pickle.load(fIn)
 
         with open(os.path.join(self.data_dir, f'{self.text_embed_type}_answer_embeddings.pkl'), "rb") as fIn:
@@ -61,18 +61,21 @@ class EasyVQADataModule(pl.LightningDataModule):
         return question_embeddings, answer_embeddings
 
     def setup(self, stage=None):
+
         image_transform = transforms.Compose([
-            transforms.Resize(int(self.im_size * 76 / 64)),
-            transforms.RandomCrop(self.im_size),
-            transforms.RandomHorizontalFlip()])
+            transforms.Resize(int(self.im_size))])
 
         self.easy_vqa_test = EasyVQADataset(
             self.data_dir, transform=image_transform, split="test", question_embeddings=self.question_embeddings,
-            answer_embeddings=self.answer_embeddings, pretrained_images=self.pretrained_images, iterator=self.iterator)
+            answer_embeddings=self.answer_embeddings, norm=self.norm, cnn_type=self.cnn_type, iterator=self.iterator)
         if stage == 'fit' or stage is None:
             self.easy_vqa_train = EasyVQADataset(
                 self.data_dir, transform=image_transform, split="train", question_embeddings=self.question_embeddings,
-                answer_embeddings=self.answer_embeddings, pretrained_images=self.pretrained_images,
+                answer_embeddings=self.answer_embeddings, norm=self.norm, cnn_type=self.cnn_type,
+                iterator=self.iterator)
+            self.easy_vqa_val = EasyVQADataset(
+                self.data_dir, transform=image_transform, split="val", question_embeddings=self.question_embeddings,
+                answer_embeddings=self.answer_embeddings, norm=self.norm, cnn_type=self.cnn_type,
                 iterator=self.iterator)
 
     def train_dataloader(self):
@@ -101,16 +104,17 @@ class EasyVQADataModule(pl.LightningDataModule):
 
     def generate_text_embeds(self, type="sbert"):
         train_dataset = EasyVQADataset(self.data_dir, split="train")
+        val_dataset = EasyVQADataset(self.data_dir, split="val")
         test_dataset = EasyVQADataset(self.data_dir, split="test")
 
-        questions = train_dataset.get_questions() | test_dataset.get_questions()
-        answers = train_dataset.get_answers() | test_dataset.get_answers()
+        questions = train_dataset.get_questions() | val_dataset.get_questions() | test_dataset.get_questions()
+        answers = train_dataset.get_answers() | val_dataset.get_answers() | test_dataset.get_answers()
 
         generator = TextEmbeddingGenerator()
         print(f"Generating {type} embeddings...")
 
-        n_components = len(self.get_answer_map()) - 1
-       # n_components = 1000
+       # n_components = len(self.get_answer_map()) - 1
+        n_components = 512
         if type == "sbert":
             model = SentenceTransformer('distilbert-base-nli-mean-tokens')
             question_embeddings, question_dim = generator.generate_sbert_embeddings(
@@ -141,40 +145,48 @@ class EasyVQADataModule(pl.LightningDataModule):
             pickle.dump(answer_embeddings, fOut, protocol=pickle.HIGHEST_PROTOCOL)
 
     def generate_image_embeddings(self):
-        image_transform = transforms.Compose([
-            transforms.Resize(224)])
-        norm = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])])
-        train_dataset = EasyVQADataset(self.data_dir, split="train", norm=norm,
-                                       transform=image_transform, iterator="image")
-        val_dataset = EasyVQADataset(self.data_dir, split="val", norm=norm, transform=image_transform, iterator="image")
-        test_dataset = EasyVQADataset(self.data_dir, split="test", norm=norm,
-                                      transform=image_transform, iterator="image")
+        if self.cnn_type == "frcnn":
+            norm = transforms.Compose([
+                transforms.Resize(128),
+                transforms.ToTensor()])
+        else:
+            norm = transforms.Compose([
+                transforms.Resize(224),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])])
 
-        generator = ImageEmbeddingGenerator("vgg16")
+        train_dataset = EasyVQADataset(self.data_dir, split="train", norm=norm, iterator="image")
+        val_dataset = EasyVQADataset(self.data_dir, split="val", norm=norm, iterator="image")
+        generator = ImageEmbeddingGenerator(self.data_dir, self.cnn_type)
 
-        batch_size = 24
-        generator.generate_embeddings(DataLoader(
-            train_dataset, batch_size=batch_size,
-            num_workers=self.num_workers, pin_memory=True), os.path.join(self.data_dir, 'train'))
+        batch_size = 1
 
-        generator.generate_embeddings(DataLoader(
-            val_dataset, batch_size=batch_size,
-            num_workers=self.num_workers, pin_memory=True), os.path.join(self.data_dir, 'val'))
+        train_outdir = os.path.join(self.data_dir, "train", 'embeddings', generator.extension)
+        if not os.path.exists(train_outdir):
+            os.makedirs(train_outdir)
+        if len(os.listdir(train_outdir)) < len(train_dataset):
+            print("Generating image embeddings for train dataset...")
+            generator.generate_embeddings(DataLoader(
+                train_dataset, batch_size=batch_size,
+                num_workers=self.num_workers, pin_memory=True), train_outdir)
 
-        generator.generate_embeddings(DataLoader(
-            test_dataset, batch_size=batch_size,
-            num_workers=self.num_workers, pin_memory=True), os.path.join(self.data_dir, 'test'))
+        val_outdir = os.path.join(self.data_dir, "val", 'embeddings', generator.extension)
+        if not os.path.exists(val_outdir):
+            os.makedirs(val_outdir)
+        if len(os.listdir(val_outdir)) < len(val_dataset):
+            print("Generating image embeddings for val dataset...")
+            generator.generate_embeddings(DataLoader(
+                train_dataset, batch_size=batch_size,
+                num_workers=self.num_workers, pin_memory=True), val_outdir)
 
 
 class EasyVQADataset(data.Dataset):
 
     def __init__(self, data_dir, transform=None, split='train', norm=None, question_embeddings=None,
-                 answer_embeddings=None, pretrained_images=False, iterator="question"):
+                 answer_embeddings=None, cnn_type=None, iterator="question"):
         self.data_dir = data_dir
-        self.pretrained_images = pretrained_images
+        self.cnn_type = cnn_type
         self.iterator = iterator
         self.split = split
         if norm:
@@ -236,7 +248,9 @@ class EasyVQADataset(data.Dataset):
         return self.norm(img)
 
     def load_image_features(self, image_id):
-        return np.load(os.path.join(self.data_dir, self.split, "embeddings", "vgg16", f"{self.split}_{image_id}.npy"))
+        return np.load(os.path.join(
+            self.data_dir, self.split, "embeddings", self.cnn_type,
+            f"{self.split}_{image_id}.npy"))
 
     def __getitem__(self, index):
         if self.iterator == "question":
@@ -263,7 +277,7 @@ class EasyVQADataset(data.Dataset):
             if self.answer_embeddings:
                 qa_embedding = np.concatenate([self.question_embeddings[question], self.answer_embeddings[answer]])
 
-        if self.pretrained_images:
+        if self.cnn_type and self.split != "test":
             img_embedding = self.load_image_features(image_idx)
         else:
             img_embedding = 0

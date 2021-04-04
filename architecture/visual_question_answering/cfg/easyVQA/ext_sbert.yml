@@ -5,14 +5,14 @@ DATA_DIR: "/home/nino/Documents/Datasets/ExtEasyVQA/"
 N_WORKERS: 12
 
 MODEL:
-  IM_DIM: 4096
+  CNN_TYPE: "frcnn"
   EF_TYPE: "sbert"
-  N_HIDDEN: 128
+  N_HIDDEN: 256
 
 TRAIN:
-  BATCH_SIZE: 24 #default 24
+  BATCH_SIZE: 2 #default 24
   MAX_EPOCH: 100
-  LR: 0.0004
+  LR: 0.0002
   CHECKPOINT: ""
 
 TEST:

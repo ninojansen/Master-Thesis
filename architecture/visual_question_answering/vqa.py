@@ -59,13 +59,10 @@ if __name__ == "__main__":
     # Load the datamodule
     datamodule = None
     if cfg.DATASET_NAME == "easy_vqa":
-        norm = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])])
         datamodule = EasyVQADataModule(
-            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=cfg.N_WORKERS,
-            pretrained_images=True, pretrained_text=True, text_embed_type=cfg.MODEL.EF_TYPE)
+            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=12,
+            cnn_type=cfg.MODEL.CNN_TYPE, pretrained_text=True, text_embed_type=cfg.MODEL.EF_TYPE)
+
     if cfg.DATASET_NAME == "abstract_vqa":
         norm = transforms.Compose([
             transforms.ToTensor(),
@@ -88,7 +85,7 @@ if __name__ == "__main__":
     model = VQA(cfg)
 
     print(f"==============Training {cfg.CONFIG_NAME} model==============")
-   # trainer.tune(model, datamodule)
+    #trainer.tune(model, datamodule)
     trainer.fit(model, datamodule)
 
     print(f"==============Validating final {cfg.CONFIG_NAME} model==============")

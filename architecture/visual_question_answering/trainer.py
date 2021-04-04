@@ -11,10 +11,11 @@ from torch.optim import optimizer
 import torchvision
 import time
 from architecture.utils.inception_score import InceptionScore
-from architecture.visual_question_answering.models import SimpleVQA, PretrainedVQA
+from architecture.visual_question_answering.models import SimpleVQA, PretrainedVQA, AttentionVQA
 from easydict import EasyDict as edict
 from architecture.utils.utils import weights_init
 from torchvision import datasets, models, transforms
+from architecture.embeddings.image.generator import ImageEmbeddingGenerator
 
 
 class VQA(pl.LightningModule):
@@ -24,23 +25,22 @@ class VQA(pl.LightningModule):
         if type(cfg) is dict:
             cfg = edict(cfg)
         self.cfg = cfg
-        self.save_hyperparameters(self.cfg)
         self.lr = cfg.TRAIN.LR
+        self.save_hyperparameters(self.cfg)
+        self.embedding_generator = ImageEmbeddingGenerator(cfg.DATA_DIR, cfg.MODEL.CNN_TYPE)
 
-        self.model = PretrainedVQA(self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
-                                   self.cfg.MODEL.N_HIDDEN, im_dim=self.cfg.MODEL.IM_DIM, )
+        # self.model = PretrainedVQA(self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
+        #                            self.cfg.MODEL.N_HIDDEN, im_dim=self.embedding_generator.dim)
+        self.model = AttentionVQA(self.cfg.MODEL.EF_DIM, self.embedding_generator.dim,
+                                  self.cfg.MODEL.N_HIDDEN, self.cfg.MODEL.N_ANSWERS)
 
-        self.model.apply(weights_init)
-        self.vgg16_model = models.vgg16(pretrained=True)
-        self.vgg16_model.classifier = nn.Sequential(*list(self.vgg16_model.classifier.children())[:-3])
-
-        self.norm_mean = torch.as_tensor([0.485, 0.456, 0.406]).cuda()[None, :, None, None]
-        self.norm_std = torch.as_tensor([0.229, 0.224, 0.225]).cuda()[None, :, None, None]
         self.start = time.perf_counter()
+
         self.train_acc = pl.metrics.Accuracy()
         self.valid_acc = pl.metrics.Accuracy()
         self.test_acc = pl.metrics.Accuracy()
         self.criterion = nn.CrossEntropyLoss()
+
         self.opt = self.configure_optimizers()
 
     def forward(self, x, y):
@@ -51,7 +51,12 @@ class VQA(pl.LightningModule):
       #  (opt_g, opt_d) = self.optimizers()
      #   self.opt.zero_grad()
         #y_pred = self(batch["img_embedding"], batch["q_embedding"])
-        y_pred = self(batch["img_embedding"], batch["q_embedding"])
+        if len(batch["img_embedding"].shape) == 1:
+            img_features = self.embedding_generator.process_batch(batch["img"], transform=True)
+        else:
+            img_features = batch["img_embedding"]
+
+        y_pred = self(img_features, batch["q_embedding"])
         loss = self.criterion(y_pred, batch["target"])
       #  loss.backward()
        # self.opt.step()
@@ -62,14 +67,19 @@ class VQA(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
        # y_pred = self(batch["img_embedding"], batch["q_embedding"])
-        y_pred = self(batch["img_embedding"], batch["q_embedding"])
+        if len(batch["img_embedding"].shape) == 1:
+            img_features = self.embedding_generator.process_batch(batch["img"], transform=True)
+        else:
+            img_features = batch["img_embedding"]
+        y_pred = self(img_features, batch["q_embedding"])
 
         self.valid_acc(F.softmax(y_pred, dim=1), batch["target"])
         self.log('Acc/Val', self.valid_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
       #  y_pred = self(batch["img_embedding"], batch["q_embedding"])
-        y_pred = self(batch["img_embedding"], batch["q_embedding"])
+        img_features = self.embedding_generator.process_batch(batch["img"], transform=True)
+        y_pred = self(img_features, batch["q_embedding"])
 
         self.test_acc(F.softmax(y_pred, dim=1), batch["target"])
         self.log('Acc/Test', self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
@@ -81,8 +91,8 @@ class VQA(pl.LightningModule):
             f"\nEpoch {self.current_epoch} finished in {round(elapsed_time, 2)}s")
 
     def configure_optimizers(self):
-        opt = torch.optim.Adam(self.model.parameters(), lr=self.lr, eps=1e-07)
-      #  opt = torch.optim.SGD(self.parameters(), lr=0.001, momentum=0.9)
+        opt = torch.optim.Adam(self.model.parameters(), lr=self.lr, betas=(0, 0.999))
+       # opt = torch.optim.SGD(self.parameters(), lr=0.001, momentum=0.9)
         return opt
 
     def preprocess_vgg16(self, img):

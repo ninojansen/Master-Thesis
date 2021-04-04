@@ -85,7 +85,7 @@ if __name__ == "__main__":
         datamodule.val_transforms = transform
     elif cfg.DATASET_NAME == "CUB200":
         datamodule = CUB200DataModule(
-            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers,
+            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=cfg.N_WORKERS,
             embedding_type=cfg.MODEL.EF_TYPE, im_size=cfg.IM_SIZE)
 
     cfg.MODEL.EF_DIM = datamodule.get_ef_dim(combined=True)
