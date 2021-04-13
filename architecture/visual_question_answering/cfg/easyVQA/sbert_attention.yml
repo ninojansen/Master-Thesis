@@ -6,9 +6,9 @@ N_WORKERS: 12
 IM_SIZE: 128
 
 MODEL:
-  CNN_TYPE: "cnn"
-  EF_TYPE: "phoc_reduced"
-  ATTENTION: False
+  CNN_TYPE: "resnet18"
+  EF_TYPE: "sbert_reduced"
+  ATTENTION: True
   N_HIDDEN: 256
 
 TRAIN:

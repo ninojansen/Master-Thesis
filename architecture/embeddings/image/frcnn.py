@@ -1,23 +1,17 @@
+
+import numpy as np
 import torch
 import torch.nn as nn
-from torchvision.models.utils import load_state_dict_from_url
-from typing import Type, Any, Callable, Union, List, Optional, cast
-import detectron2
-from detectron2 import model_zoo
-from detectron2.engine import DefaultPredictor
-from detectron2.config import get_cfg
-from detectron2.utils.visualizer import Visualizer
-from detectron2.data import MetadataCatalog, DatasetCatalog
-from detectron2.modeling.postprocessing import detector_postprocess
-from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputLayers, FastRCNNOutputs, fast_rcnn_inference_single_image, fast_rcnn_inference
-from detectron2.modeling.box_regression import Box2BoxTransform
-from torch import Tensor
-from collections import OrderedDict
-import torchvision
-from torchvision.ops import boxes as box_ops
 import torch.nn.functional as F
-import numpy as np
-# https://www.kaggle.com/yerramvarun/fine-tuning-faster-rcnn-using-pytorch#Decode-predictions
+import torchvision
+from detectron2 import model_zoo
+from detectron2.config import get_cfg
+from detectron2.engine import DefaultPredictor
+from detectron2.modeling.box_regression import Box2BoxTransform
+from detectron2.modeling.postprocessing import detector_postprocess
+from detectron2.modeling.roi_heads.fast_rcnn import (
+    FastRCNNOutputLayers, FastRCNNOutputs, fast_rcnn_inference,
+    fast_rcnn_inference_single_image)
 
 
 class FRCNN(nn.Module):

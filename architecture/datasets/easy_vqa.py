@@ -20,6 +20,7 @@ from architecture.embeddings.text.generator import TextEmbeddingGenerator
 from architecture.embeddings.image.generator import ImageEmbeddingGenerator
 from sentence_transformers import SentenceTransformer
 import pickle
+from sklearn.decomposition import PCA
 
 
 class EasyVQADataModule(pl.LightningDataModule):
@@ -42,7 +43,7 @@ class EasyVQADataModule(pl.LightningDataModule):
         self.norm = norm
 
         self.question_embeddings, self.answer_embeddings = self.load_embeddings()
-        if cnn_type:
+        if cnn_type and cnn_type != "cnn":
             self.generate_image_embeddings()
 
     def load_embeddings(self):
@@ -83,7 +84,7 @@ class EasyVQADataModule(pl.LightningDataModule):
                           shuffle=True, num_workers=self.num_workers, pin_memory=True)
 
     def val_dataloader(self):
-        return DataLoader(self.easy_vqa_test, batch_size=self.batch_size, drop_last=True,
+        return DataLoader(self.easy_vqa_val, batch_size=self.batch_size, drop_last=True,
                           num_workers=self.num_workers, pin_memory=True)
 
     def test_dataloader(self):
@@ -105,44 +106,53 @@ class EasyVQADataModule(pl.LightningDataModule):
     def generate_text_embeds(self, type="sbert"):
         train_dataset = EasyVQADataset(self.data_dir, split="train")
         val_dataset = EasyVQADataset(self.data_dir, split="val")
-        test_dataset = EasyVQADataset(self.data_dir, split="test")
 
-        questions = train_dataset.get_questions() | val_dataset.get_questions() | test_dataset.get_questions()
-        answers = train_dataset.get_answers() | val_dataset.get_answers() | test_dataset.get_answers()
+        questions = train_dataset.get_questions() | val_dataset.get_questions()
+        answers = train_dataset.get_answers() | val_dataset.get_answers()
 
+        input_dict = {"questions": questions, "answers": answers}
         generator = TextEmbeddingGenerator()
         print(f"Generating {type} embeddings...")
 
-       # n_components = len(self.get_answer_map()) - 1
-        n_components = 512
-        if type == "sbert":
+        pca = None
+        word_to_ix = None
+        if type == "sbert_full":
             model = SentenceTransformer('distilbert-base-nli-mean-tokens')
-            question_embeddings, question_dim = generator.generate_sbert_embeddings(
-                questions, model, n_components=n_components)
-            answer_embeddings, answer_dim = generator.generate_sbert_embeddings(
-                answers, model, n_components=n_components)
-
+            embeddings, dim, _ = generator.generate_sbert_embeddings(
+                input_dict, model, reduce_features=False)
+        if type == "sbert_reduced":
+            model = SentenceTransformer('distilbert-base-nli-mean-tokens')
+            embeddings, dim, pca = generator.generate_sbert_embeddings(
+                input_dict, model, reduce_features=True)
         elif type == "sbert_finetuned":
             model = SentenceTransformer('distilbert-base-nli-mean-tokens')
             train_examples = train_dataset.get_sentence_pairs()
             model = generator.finetune(train_examples, model, epochs=2)
-            question_embeddings, question_dim = generator.generate_sbert_embeddings(
-                questions, model, n_components=n_components)
-            answer_embeddings, answer_dim = generator.generate_sbert_embeddings(
-                answers, model, n_components=n_components)
+            embeddings, dim, pca = generator.generate_sbert_embeddings(
+                input_dict, model, reduce_features=True)
+
         elif type == "bow":
-            question_embeddings, question_dim = generator.generate_bow_embeddings(questions)
-            answer_embeddings, answer_dim = generator.generate_bow_embeddings(answers)
+            embeddings, dim, word_to_ix = generator.generate_bow_embeddings(input_dict)
+
+        elif type == "phoc_full":
+            embeddings, dim, pca = generator.generate_phoc_embeddings(input_dict, reduce_features=False)
+        elif type == "phoc_reduced":
+            embeddings, dim, pca = generator.generate_phoc_embeddings(input_dict, reduce_features=True)
         else:
             print(f"Unsupported embedding type: {type}")
             return
 
-        print(f"{type} question embedding dim={question_dim}")
-        print(f"{type} answer embedding dim={answer_dim}")
+        print(f"{type} embedding dim={dim}")
         with open(os.path.join(self.data_dir, f'{type}_question_embeddings.pkl'), "wb") as fOut:
-            pickle.dump(question_embeddings, fOut, protocol=pickle.HIGHEST_PROTOCOL)
+            pickle.dump(embeddings["questions"], fOut, protocol=pickle.HIGHEST_PROTOCOL)
         with open(os.path.join(self.data_dir, f'{type}_answer_embeddings.pkl'), "wb") as fOut:
-            pickle.dump(answer_embeddings, fOut, protocol=pickle.HIGHEST_PROTOCOL)
+            pickle.dump(embeddings["answers"], fOut, protocol=pickle.HIGHEST_PROTOCOL)
+        if pca:
+            with open(os.path.join(self.data_dir, f'{type}_pca.pkl'), "wb") as fOut:
+                pickle.dump(pca, fOut, protocol=pickle.HIGHEST_PROTOCOL)
+        if word_to_ix:
+            with open(os.path.join(self.data_dir, f'{type}_word_to_ix.pkl'), "wb") as fOut:
+                pickle.dump(word_to_ix, fOut, protocol=pickle.HIGHEST_PROTOCOL)
 
     def generate_image_embeddings(self):
         if self.cnn_type == "frcnn":
@@ -177,7 +187,7 @@ class EasyVQADataModule(pl.LightningDataModule):
         if len(os.listdir(val_outdir)) < len(val_dataset):
             print("Generating image embeddings for val dataset...")
             generator.generate_embeddings(DataLoader(
-                train_dataset, batch_size=batch_size,
+                val_dataset, batch_size=batch_size,
                 num_workers=self.num_workers, pin_memory=True), val_outdir)
 
 
@@ -212,34 +222,34 @@ class EasyVQADataset(data.Dataset):
         answers_file = os.path.join(self.data_dir, "answers.txt")
         with open(answers_file, 'r') as file:
             answers = dict((value.strip(), i) for i, value in enumerate(file))
-        # answers = {"yes": 0, "no": 1, "circle": 2, "rectangle": 3, "triangle": 4, "red": 5,
-        #            "green": 6, "blue": 7, "black": 8, "gray": 9, "teal": 10, "brown": 11, "yellow": 12}
+
         with open(questions_file, 'r') as file:
-            questions = json.load(file)
-
-            imgToQA = {}
-
-            # q[0] question q[1] answer q[2] corresponding image id
-            for q in questions:
-                qa = (q[0], q[1])
-                if q[2] not in imgToQA.keys():
-                    imgToQA[q[2]] = []
-                imgToQA[q[2]].append(qa)
-            images = sorted(imgToQA.keys())
+            imgToQA = json.load(file)
+            questions = []
+            for q_list in imgToQA.values():
+                questions += q_list
+            images = sorted([int(key) for key in imgToQA.keys()])
+            # # q[0] question q[1] answer q[2] corresponding image id
+            # for q in questions:
+            #     qa = (q[0], q[1])
+            #     if q[2] not in imgToQA.keys():
+            #         imgToQA[q[2]] = []
+            #     imgToQA[q[2]].append(qa)
+            # images = sorted(imgToQA.keys())
             return questions, answers, images, imgToQA
 
     def get_sentence_pairs(self):
         qa_pairs = []
         for qas in self.imgToQA.values():
             for qa in qas:
-                qa_pairs.append(InputExample(texts=[qa[0], qa[1]]))
+                qa_pairs.append(InputExample(texts=[qa["question"], qa["answer"]]))
         return qa_pairs
 
     def get_questions(self):
-        return set([q[0] for q in self.questions])
+        return set([q["question"] for q in self.questions])
 
     def get_answers(self):
-        return set([q[1] for q in self.questions])
+        return self.answers.keys()
 
     def load_image(self, image_id):
         img = Image.open(os.path.join(self.im_dir, f"{self.split}_{image_id}.png")).convert('RGB')
@@ -254,19 +264,19 @@ class EasyVQADataset(data.Dataset):
 
     def __getitem__(self, index):
         if self.iterator == "question":
-            question = self.questions[index][0]
-            answer = self.questions[index][1]
-            image_idx = self.questions[index][2]
+            question = self.questions[index]["question"]
+            answer = self.questions[index]["answer"]
+            image_idx = self.questions[index]["image_id"]
         elif self.iterator == "image":
             image_idx = self.images[index]
-            qa_list = self.imgToQA[image_idx]
+            qa_list = self.imgToQA[str(image_idx)]
             qa = random.choice(qa_list)
-            question = qa[0]
-            answer = qa[1]
+            question = qa["question"]
+            answer = qa["answer"]
         else:
-            question = self.questions[index][0]
-            answer = self.questions[index][1]
-            image_idx = self.questions[index][2]
+            question = self.questions[index]["question"]
+            answer = self.questions[index]["answer"]
+            image_idx = self.questions[index]["image_id"]
 
         img = self.load_image(image_idx)
         text = f'{question} {answer}'
@@ -277,7 +287,7 @@ class EasyVQADataset(data.Dataset):
             if self.answer_embeddings:
                 qa_embedding = np.concatenate([self.question_embeddings[question], self.answer_embeddings[answer]])
 
-        if self.cnn_type and self.split != "test":
+        if self.cnn_type and self.cnn_type != "cnn" and self.split != "test":
             img_embedding = self.load_image_features(image_idx)
         else:
             img_embedding = 0
@@ -295,9 +305,14 @@ class EasyVQADataset(data.Dataset):
 
 if __name__ == "__main__":
     data_dir = "/home/nino/Documents/Datasets/ExtEasyVQA/"
-    datamodule = EasyVQADataModule(data_dir=data_dir, num_workers=1)
+    datamodule = EasyVQADataModule(data_dir=data_dir, num_workers=1, batch_size=4, cnn_type="vgg16_flat")
+    datamodule.generate_image_embeddings()
+    datamodule.setup()
+    for batch in datamodule.train_dataloader():
+        pass
+    print("Succes!")
    # datamodule.generate_text_embeds(type="bow")
-    # datamodule.generate_text_embeds(type="sbert")
+    # datamodule.generate_text_embeds(type="phoc")
     # datamodule.generate_text_embeds(type="sbert_finetuned")
    # datamodule.generate_image_embeddings()
 

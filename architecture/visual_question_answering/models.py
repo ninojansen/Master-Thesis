@@ -6,37 +6,54 @@ import torch.nn.functional as F
 from torch.nn.modules import activation
 import os
 import sys
+
+from torch.nn.modules.pooling import MaxPool2d
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
 from architecture.utils.utils import weights_init, model_summary
 # https://victorzhou.com/blog/easy-vqa/
 
 
 class SimpleVQA(nn.Module):
-    def __init__(self, im_size, ef_dim, n_answers, pretrained_img=False, im_dim=None):
+    def __init__(self, im_size, ef_dim, n_answers, n_hidden):
         super(SimpleVQA, self).__init__()
         self.n_answers = n_answers
-        self.pretrained_img = pretrained_img
-        self.im_dim = im_dim
-        if not pretrained_img:
-            self.conv1 = nn.Conv2d(3, 6, 5)
-            self.conv2 = nn.Conv2d(6, 16, 5)
-            self.conv3 = nn.Conv2d(16, 32, 5)
-            self.pool = nn.MaxPool2d(2, 2)
-        if pretrained_img:
-            self.fc1 = nn.Linear(im_dim, 32)
-        else:
-            self.fc1 = nn.Linear(32 * 4 * 4, 32)
+        self.im_size = im_size
 
-        self.question = nn.Sequential(nn.Linear(ef_dim, 32), nn.ReLU(), nn.Linear(32, 32), nn.ReLU())
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(3, 6, 5, stride=1, padding=2),
+            nn.BatchNorm2d(6),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2))
 
-        self.out = nn.Sequential(nn.Linear(32, 32), nn.ReLU(), nn.Linear(32, n_answers))
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(6, 16, 5, stride=1, padding=2),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2))
+
+        self.conv3 = nn.Sequential(nn.Conv2d(16, 32, 5, stride=1, padding=2), nn.BatchNorm2d(32), nn.ReLU(),
+                                   nn.MaxPool2d(2, 2))
+        self.conv4 = nn.Sequential(nn.Conv2d(32, 64, 5, stride=1, padding=2), nn.BatchNorm2d(64), nn.ReLU(),
+                                   nn.MaxPool2d(2, 2))
+
+        self.im_dim = int(((im_size / 2**4)**2)) * 64
+        self.fc1 = nn.Linear(self.im_dim, n_hidden)
+
+        self.question = nn.Sequential(nn.Linear(ef_dim, n_hidden), nn.ReLU(), nn.Linear(n_hidden, n_hidden), nn.ReLU())
+
+        self.out = nn.Sequential(
+            nn.Linear(n_hidden, n_hidden),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(n_hidden, n_answers))
 
     def forward(self, x, y):
-        if not self.pretrained_img:
-            x = self.pool(F.relu(self.conv1(x)))
-            x = self.pool(F.relu(self.conv2(x)))
-            x = self.pool(F.relu(self.conv3(x)))
-            x = x.view(-1, 32 * 4 * 4)
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
+
+        x = x.view(-1, self.im_dim)
 
         x = F.relu(self.fc1(x))
 

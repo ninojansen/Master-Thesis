@@ -27,12 +27,19 @@ class VQA(pl.LightningModule):
         self.cfg = cfg
         self.lr = cfg.TRAIN.LR
         self.save_hyperparameters(self.cfg)
-        self.embedding_generator = ImageEmbeddingGenerator(cfg.DATA_DIR, cfg.MODEL.CNN_TYPE)
+        if cfg.MODEL.CNN_TYPE != "cnn":
+            self.embedding_generator = ImageEmbeddingGenerator(cfg.DATA_DIR, cfg.MODEL.CNN_TYPE)
 
-        # self.model = PretrainedVQA(self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
-        #                            self.cfg.MODEL.N_HIDDEN, im_dim=self.embedding_generator.dim)
-        self.model = AttentionVQA(self.cfg.MODEL.EF_DIM, self.embedding_generator.dim,
-                                  self.cfg.MODEL.N_HIDDEN, self.cfg.MODEL.N_ANSWERS)
+        if cfg.MODEL.ATTENTION:
+            self.model = AttentionVQA(self.cfg.MODEL.EF_DIM, self.embedding_generator.dim,
+                                      self.cfg.MODEL.N_HIDDEN, self.cfg.MODEL.N_ANSWERS)
+        else:
+            if cfg.MODEL.CNN_TYPE == "cnn":
+                self.model = SimpleVQA(self.cfg.IM_SIZE, self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
+                                       self.cfg.MODEL.N_HIDDEN)
+            else:
+                self.model = PretrainedVQA(self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
+                                           self.cfg.MODEL.N_HIDDEN, im_dim=self.embedding_generator.dim)
 
         self.start = time.perf_counter()
 
@@ -51,12 +58,16 @@ class VQA(pl.LightningModule):
       #  (opt_g, opt_d) = self.optimizers()
      #   self.opt.zero_grad()
         #y_pred = self(batch["img_embedding"], batch["q_embedding"])
-        if len(batch["img_embedding"].shape) == 1:
-            img_features = self.embedding_generator.process_batch(batch["img"], transform=True)
-        else:
-            img_features = batch["img_embedding"]
+        img = batch["img"]
 
-        y_pred = self(img_features, batch["q_embedding"])
+        if self.cfg.MODEL.CNN_TYPE != "cnn":
+            # Get image features if not default cnn
+            if len(batch["img_embedding"].shape) == 1:
+                img = self.embedding_generator.process_batch(batch["img"], transform=True)
+            else:
+                img = batch["img_embedding"]
+
+        y_pred = self(img, batch["q_embedding"])
         loss = self.criterion(y_pred, batch["target"])
       #  loss.backward()
        # self.opt.step()
@@ -67,19 +78,23 @@ class VQA(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
        # y_pred = self(batch["img_embedding"], batch["q_embedding"])
-        if len(batch["img_embedding"].shape) == 1:
-            img_features = self.embedding_generator.process_batch(batch["img"], transform=True)
-        else:
-            img_features = batch["img_embedding"]
-        y_pred = self(img_features, batch["q_embedding"])
+        img = batch["img"]
+        if self.cfg.MODEL.CNN_TYPE != "cnn":
+            if len(batch["img_embedding"].shape) == 1:
+                img = self.embedding_generator.process_batch(batch["img"], transform=True)
+            else:
+                img = batch["img_embedding"]
+        y_pred = self(img, batch["q_embedding"])
 
         self.valid_acc(F.softmax(y_pred, dim=1), batch["target"])
         self.log('Acc/Val', self.valid_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
       #  y_pred = self(batch["img_embedding"], batch["q_embedding"])
-        img_features = self.embedding_generator.process_batch(batch["img"], transform=True)
-        y_pred = self(img_features, batch["q_embedding"])
+        img = batch["img"]
+        if self.cfg.MODEL.CNN_TYPE != "cnn":
+            img = self.embedding_generator.process_batch(batch["img"], transform=True)
+        y_pred = self(img, batch["q_embedding"])
 
         self.test_acc(F.softmax(y_pred, dim=1), batch["target"])
         self.log('Acc/Test', self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
@@ -94,17 +109,6 @@ class VQA(pl.LightningModule):
         opt = torch.optim.Adam(self.model.parameters(), lr=self.lr, betas=(0, 0.999))
        # opt = torch.optim.SGD(self.parameters(), lr=0.001, momentum=0.9)
         return opt
-
-    def preprocess_vgg16(self, img):
-        self.vgg16_model.eval()
-        with torch.no_grad():
-            img = F.interpolate(img, size=224)
-            # Batched transforms.Normalize
-
-            img.sub_(self.norm_mean).div_(self.norm_std)
-            # img = torch.vmap(transforms.Normalize(mean=[0.485, 0.456, 0.406],
-            #                      std=[0.229, 0.224, 0.225]))
-            return self.vgg16_model(img)
 
     def get_progress_bar_dict(self):
         # don't show the version number

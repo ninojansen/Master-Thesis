@@ -3,58 +3,51 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))))
 import numpy as np
-import pytorch_lightning as pl
 import torch
-import torch.utils.data as data
-import torchvision.transforms as transforms
-from PIL import Image
-from torch.utils.data import DataLoader, random_split
-from tqdm import tqdm
-import random
-import json
-import matplotlib.pyplot as plt
-from tqdm import tqdm
-import pickle
-from torchvision import datasets, models, transforms
-from torch import nn
-import shutil
 import torch.nn.functional as F
-from architecture.embeddings.image.yolov3 import Darknet
-from detectron2 import model_zoo
-from detectron2.engine import DefaultPredictor
-from detectron2.config import get_cfg
-from detectron2.modeling.meta_arch import build
-from detectron2.utils.visualizer import Visualizer
-from detectron2.data import MetadataCatalog
-from detectron2.modeling import build_model
-import torchvision
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from architecture.embeddings.image.frcnn import FRCNN
+from torch import nn
+from torchvision import models
+from tqdm import tqdm
 
 
 class ImageEmbeddingGenerator():
 
     def __init__(self, data_dir, model_name):
-        if model_name == "vgg19":
-            self.model = models.vgg19(pretrained=True)
+
+        if model_name == "vgg16":
+            self.model = models.vgg16(pretrained=True)
             self.model = nn.Sequential(*list(self.model.features.children())[:-1])
-            self.extension = "vgg19"
+            self.extension = "vgg16"
+            self.flatten = False
+            self.dim = 512
+
+        elif model_name == "vgg16_flat":
+            self.model = models.vgg16(pretrained=True)
+            self.model.classifier = nn.Sequential(*list(self.model.classifier.children())[:-3])
+            self.extension = "vgg16_flat"
+            self.flatten = True
             self.dim = 4096
+
         elif model_name == "resnet18":
             self.model = models.resnet18(pretrained=True)
             self.model = nn.Sequential(*(list(self.model.children())[:-2]))
             self.extension = "resnet18"
+            self.flatten = False
             self.dim = 512
         elif model_name == "resnet152":
             self.model = models.resnet152(pretrained=True)
             self.model = nn.Sequential(*(list(self.model.children())[:-2]))
             self.extension = "resnet152"
+            self.flatten = False
             self.dim = 2049
         elif model_name == "frcnn":
             self.model = FRCNN()
             self.extension = "frcnn"
+            self.flatten = False
             self.dim = 2048
-
+        else:
+            raise NotImplementedError
         self.data_dir = data_dir
         self.model.cuda()
         self.model.eval()
@@ -72,10 +65,9 @@ class ImageEmbeddingGenerator():
     def process_batch(self, images, transform=False):
         with torch.no_grad():
             if transform:
-                images = F.interpolate(images, size=64)
+                images = F.interpolate(images, size=224)
                 images.sub_(self.norm_mean).div_(self.norm_std)
             if self.extension == "frcnn":
-
                 features = torch.stack([self.model(x.unsqueeze(0)) for x in images]).squeeze(1)
                 #[print(x.shape) for x in images]
             else:
@@ -84,7 +76,13 @@ class ImageEmbeddingGenerator():
                 #     features = F.avg_pool2d()
                 # L2-Norm
                 features = F.normalize(features, p=2, dim=1)
-                features = features.view(features.shape[0], features.shape[1], features.shape[2] * features.shape[3])
+                if self.flatten:
+                    pass
+                else:
+                    features = features.view(
+                        features.shape[0],
+                        features.shape[1],
+                        features.shape[2] * features.shape[3])
         return features
 
 
