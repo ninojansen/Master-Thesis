@@ -27,20 +27,29 @@ class VQA(pl.LightningModule):
         self.cfg = cfg
         self.lr = cfg.TRAIN.LR
         self.save_hyperparameters(self.cfg)
+
         if cfg.MODEL.CNN_TYPE != "cnn":
             self.embedding_generator = ImageEmbeddingGenerator(cfg.DATA_DIR, cfg.MODEL.CNN_TYPE)
 
         if cfg.MODEL.ATTENTION:
             self.model = AttentionVQA(self.cfg.MODEL.EF_DIM, self.embedding_generator.dim,
                                       self.cfg.MODEL.N_HIDDEN, self.cfg.MODEL.N_ANSWERS)
+            self._example_input_array = (
+                torch.ones(1, self.embedding_generator.dim),
+                torch.ones(1, self.cfg.MODEL.EF_DIM))
         else:
             if cfg.MODEL.CNN_TYPE == "cnn":
                 self.model = SimpleVQA(self.cfg.IM_SIZE, self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
                                        self.cfg.MODEL.N_HIDDEN)
+                self._example_input_array = (
+                    torch.ones(1, 3, self.cfg.IM_SIZE, self.cfg.IM_SIZE),
+                    torch.ones(1, self.cfg.MODEL.EF_DIM))
             else:
                 self.model = PretrainedVQA(self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
                                            self.cfg.MODEL.N_HIDDEN, im_dim=self.embedding_generator.dim)
-
+                self._example_input_array = (
+                    torch.ones(1, self.embedding_generator.dim),
+                    torch.ones(1, self.cfg.MODEL.EF_DIM))
         self.start = time.perf_counter()
 
         self.train_acc = pl.metrics.Accuracy()

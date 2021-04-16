@@ -30,6 +30,7 @@ def parse_args():
     parser.add_argument('--test', dest='test', action="store_true", default=False)
     # Model parameters
     # EF_TYPE, ATTENTION, CNN_TYPE, N_HIDDEN, LR
+    parser.add_argument('--config_name', dest='config_name', type=str, default=None)
     parser.add_argument('--ef_type', dest='ef_type', type=str, default=None)
     parser.add_argument('--n_hidden', dest='n_hidden', type=int, default=None)
     parser.add_argument('--cnn_type', dest='cnn_type', type=str, default=None)
@@ -65,6 +66,8 @@ if __name__ == "__main__":
         cfg.MODEL.ATTENTION = args.attention
     if args.lr:
         cfg.TRAIN.LR = args.lr
+    if args.config_name:
+        cfg.CONFIG_NAME = args.config_name
 
     print('Using config:')
     pprint.pprint(cfg)
@@ -97,9 +100,11 @@ if __name__ == "__main__":
     cfg.MODEL.EF_DIM = datamodule.get_ef_dim(combined=False)
     cfg.MODEL.N_ANSWERS = len(datamodule.get_answer_map())
 
-    version = datetime.now().strftime("%d-%m_%H:%M:%S")
+    #version = datetime.now().strftime("%d-%m_%H:%M:%S")
+    version = f"ef={cfg.MODEL.EF_TYPE}_nhidden={cfg.MODEL.N_HIDDEN}_lr={cfg.TRAIN.LR}"
 
-    logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, version=f"{cfg.CONFIG_NAME}_{version}")
+    logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, log_graph=True,
+                               version=version)
 
     early_stop_callback = EarlyStopping(
         monitor='Acc/Val',
@@ -114,7 +119,6 @@ if __name__ == "__main__":
         auto_lr_find=True, callbacks=[early_stop_callback])
 
     model = VQA(cfg)
-
     print(f"==============Training {cfg.CONFIG_NAME} model==============")
   #  trainer.tune(model, datamodule)
     trainer.fit(model, datamodule)

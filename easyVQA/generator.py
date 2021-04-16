@@ -659,7 +659,7 @@ class DataGenerator:
                                  "answer": self.relate_positions(attr1[3],
                                                                  attr2[3],
                                                                  position),
-                                 "type": "location", "specificity": 5,
+                                 "type": "location", "specificity": 3,
                                  "bool": True, "image_id": image_id})
                             # Shape / Color + Shape
                             questions.append(
@@ -667,7 +667,7 @@ class DataGenerator:
                                  "answer": self.relate_positions(attr1[3],
                                                                  attr2[3],
                                                                  position),
-                                 "type": "location", "specificity": 4,
+                                 "type": "location", "specificity": 3,
                                  "bool": True, "image_id": image_id})
                             # Color + Shape / Color + Shape
                             questions.append(
@@ -675,7 +675,7 @@ class DataGenerator:
                                  "answer": self.relate_positions(attr1[3],
                                                                  attr2[3],
                                                                  position),
-                                 "type": "location", "specificity": 4,
+                                 "type": "location", "specificity": 3,
                                  "bool": True, "image_id": image_id})
 
             for attr1 in attr_list:

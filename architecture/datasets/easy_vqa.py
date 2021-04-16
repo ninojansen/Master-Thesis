@@ -120,7 +120,7 @@ class EasyVQADataModule(pl.LightningDataModule):
             model = SentenceTransformer('distilbert-base-nli-mean-tokens')
             embeddings, dim, _ = generator.generate_sbert_embeddings(
                 input_dict, model, reduce_features=False)
-        if type == "sbert_reduced":
+        elif type == "sbert_reduced":
             model = SentenceTransformer('distilbert-base-nli-mean-tokens')
             embeddings, dim, pca = generator.generate_sbert_embeddings(
                 input_dict, model, reduce_features=True)
