@@ -27,7 +27,7 @@ class EasyVQADataModule(pl.LightningDataModule):
 
     def __init__(
             self, data_dir, batch_size=24, im_size=64, num_workers=4, pretrained_text=False,
-            cnn_type=None, text_embed_type="sbert", norm=None, iterator="question"):
+            cnn_type=None, text_embed_type="sbert_reduced", norm=None, iterator="question"):
         super().__init__()
         self.data_dir = data_dir
         self.im_size = im_size
@@ -305,7 +305,12 @@ class EasyVQADataset(data.Dataset):
 
 if __name__ == "__main__":
     data_dir = "/home/nino/Documents/Datasets/ExtEasyVQA/"
-    datamodule = EasyVQADataModule(data_dir=data_dir, num_workers=1, batch_size=4, cnn_type="vgg16_flat")
+  #  data_dir = "/data/s2965690/datasets/ExtEasyVQA/"
+    datamodule = EasyVQADataModule(data_dir=data_dir, num_workers=12, batch_size=4,
+                                   cnn_type="resnet18", text_embed_type="sbert_reduced")
+    # datamodule.generate_text_embeds(type="bow")
+    # datamodule.generate_text_embeds(type="phoc_reduced")
+  #  datamodule.generate_text_embeds(type="sbert_finetuned")
     datamodule.generate_image_embeddings()
     datamodule.setup()
     for batch in datamodule.train_dataloader():

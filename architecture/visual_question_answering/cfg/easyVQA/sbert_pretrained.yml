@@ -7,7 +7,7 @@ IM_SIZE: 128
 
 MODEL:
   CNN_TYPE: "vgg16_flat"
-  EF_TYPE: "sbert"
+  EF_TYPE: "sbert_reduced"
   ATTENTION: False
   N_HIDDEN: 256
 

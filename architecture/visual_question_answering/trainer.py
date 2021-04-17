@@ -34,8 +34,12 @@ class VQA(pl.LightningModule):
         if cfg.MODEL.ATTENTION:
             self.model = AttentionVQA(self.cfg.MODEL.EF_DIM, self.embedding_generator.dim,
                                       self.cfg.MODEL.N_HIDDEN, self.cfg.MODEL.N_ANSWERS)
+            if cfg.MODEL.CNN_TYPE == "frcnn":
+                k = 6
+            else:
+                k = 49
             self._example_input_array = (
-                torch.ones(1, self.embedding_generator.dim),
+                torch.ones(1, self.embedding_generator.dim, k),
                 torch.ones(1, self.cfg.MODEL.EF_DIM))
         else:
             if cfg.MODEL.CNN_TYPE == "cnn":
