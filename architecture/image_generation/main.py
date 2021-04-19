@@ -15,6 +15,8 @@ import argparse
 from pl_bolts.datamodules import CIFAR10DataModule
 from architecture.image_generation.model import *
 from architecture.image_generation.trainer import *
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+
 from datetime import datetime
 from architecture.visual_question_answering.trainer import VQA
 
@@ -29,6 +31,7 @@ def parse_args():
     parser.add_argument('--ckpt', dest='ckpt', type=str, default=None)
     parser.add_argument('--gan', dest='gan', type=str, default=None)
     parser.add_argument('--ef_type', dest='ef_type', type=str, default=None)
+    parser.add_argument('--data_dir', dest='data_dir', type=str, default=None)
     parser.add_argument('--type', dest='type', type=str, default="no_pretrain")
     parser.add_argument('--test', dest='test', action="store_true", default=False)
     parser.add_argument("--iterator", dest='iterator', type=str, default="image")
@@ -53,6 +56,8 @@ if __name__ == "__main__":
         cfg.N_WORKERS = args.num_workers
     if args.ef_type:
         cfg.MODEL.EF_TYPE = args.ef_type
+    if args.data_dir:
+        cfg.DATA_DIR = args.data_dir
     print('Using config:')
     pprint.pprint(cfg)
 
@@ -104,8 +109,16 @@ if __name__ == "__main__":
         # VAE training
         vae_logger = vae_logger = TensorBoardLogger(
             args.output_dir, name=cfg.MODEL.EF_TYPE, version=f"vae_{version}")
-        vae_trainer = vae_trainer = pl.Trainer.from_argparse_args(
-            args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=vae_logger, default_root_dir=args.output_dir)
+        early_stop_callback = EarlyStopping(
+            monitor='Loss/VAE',
+            min_delta=0.00,
+            patience=3,
+            verbose=False,
+            mode='min'
+        )
+        vae_trainer = pl.Trainer.from_argparse_args(
+            args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=vae_logger, default_root_dir=args.output_dir,
+            callbacks=[early_stop_callback])
 
         if cfg.MODEL.GAN == "DFGAN":
             vae_model = VAE_DFGAN(cfg)

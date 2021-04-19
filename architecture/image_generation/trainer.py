@@ -22,6 +22,7 @@ class VAE_DFGAN(pl.LightningModule):
 
     def __init__(self, cfg):
         super().__init__()
+        self.automatic_optimization = False
         if type(cfg) is dict:
             cfg = edict(cfg)
         self.cfg = cfg
@@ -34,7 +35,9 @@ class VAE_DFGAN(pl.LightningModule):
         self.decoder.apply(weights_init)
         self.kl_loss = lambda mu, logvar: -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
+        self.track_norm = False
         self.start = time.perf_counter()
+        self.opt = self.configure_optimizers()
 
     def on_pretrain_routine_start(self):
         self.logger.experiment.add_graph(
@@ -54,6 +57,7 @@ class VAE_DFGAN(pl.LightningModule):
         return self.decoder(x, y)
 
     def training_step(self, batch, batch_idx):
+        self.opt.zero_grad()
         x = batch["img"]
         y = batch["qa_embedding"]
         self.eval_y = y
@@ -70,10 +74,22 @@ class VAE_DFGAN(pl.LightningModule):
 
         kl_loss = self.kl_loss(mu, logvar) / x.view(-1, self.cfg.IM_SIZE ** 2 * 3).data.shape[0]
         loss = recon_loss + kl_loss
+
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.parameters(), 100)
+        if self.track_norm:
+            total_norm = 0
+            for p in self.encoder.parameters():
+                param_norm = p.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+            total_norm = total_norm ** (1. / 2)
+            self.log("Norm/Total", total_norm)
+
+        self.opt.step()
+
         self.log('Loss/KL', kl_loss, on_step=False, on_epoch=True)
         self.log('Loss/Recon', recon_loss, on_step=False, on_epoch=True)
-        self.log('Loss/VAE', loss, on_step=False, on_epoch=True)
-        return loss
+        self.log('Loss/VAE', loss, on_step=True, on_epoch=True, prog_bar=True)
 
     def on_epoch_end(self):
         elapsed_time = time.perf_counter() - self.start
