@@ -36,6 +36,14 @@ class VAE_DFGAN(pl.LightningModule):
 
         self.start = time.perf_counter()
 
+    def on_pretrain_routine_start(self):
+        self.logger.experiment.add_graph(
+            self.encoder, (torch.ones(1, 3, self.cfg.IM_SIZE, self.cfg.IM_SIZE).cuda(),
+                           torch.ones(1, self.cfg.MODEL.EF_DIM).cuda()))
+
+        self.logger.experiment.add_graph(self.decoder, (torch.ones(1, self.cfg.MODEL.Z_DIM).cuda(),
+                                                        torch.ones(1, self.cfg.MODEL.EF_DIM).cuda()))
+
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
@@ -118,6 +126,14 @@ class DFGAN(pl.LightningModule):
             self.train_vqa_acc = pl.metrics.Accuracy()
             self.val_vqa_acc = pl.metrics.Accuracy()
             self.test_vqa_acc = pl.metrics.Accuracy()
+
+    def on_pretrain_routine_start(self):
+        self.logger.experiment.add_graph(
+            self.discriminator, (torch.ones(1, 3, self.cfg.IM_SIZE, self.cfg.IM_SIZE).cuda(),
+                                 torch.ones(1, self.cfg.MODEL.EF_DIM).cuda()))
+
+        self.logger.experiment.add_graph(self.generator, (torch.ones(1, self.cfg.MODEL.Z_DIM).cuda(),
+                                                          torch.ones(1, self.cfg.MODEL.EF_DIM).cuda()))
 
     def forward(self, x, y=None):
         # in lightning, forward defines the prediction/inference actions
@@ -206,9 +222,9 @@ class DFGAN(pl.LightningModule):
         if self.vqa_model:
             if self.cfg.TRAIN.VQA_LAMBDA == 0:
                 with torch.no_grad():
-                    vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_img), batch["q_embedding"])
+                    vqa_pred = self.vqa_model(self.vqa_model.preprocess_img(fake_img), batch["q_embedding"])
             else:
-                vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_img), batch["q_embedding"])
+                vqa_pred = self.vqa_model(self.vqa_model.preprocess_img(fake_img), batch["q_embedding"])
                 vqa_loss = F.cross_entropy(vqa_pred, batch["target"]) * self.cfg.TRAIN.VQA_LAMBDA
                 self.manual_backward(vqa_loss, self.opt_g)
             self.train_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
@@ -232,7 +248,7 @@ class DFGAN(pl.LightningModule):
 
         if self.vqa_model:
             with torch.no_grad():
-                vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_img), batch["q_embedding"])
+                vqa_pred = self.vqa_model(self.vqa_model.preprocess_img(fake_img), batch["q_embedding"])
                 self.val_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
                 self.log('VQA/Val', self.val_vqa_acc, on_step=False, on_epoch=True, prog_bar=True)
         # if not self.trainer.running_sanity_check and batch_idx == 0:
@@ -255,7 +271,7 @@ class DFGAN(pl.LightningModule):
 
         if self.vqa_model:
             with torch.no_grad():
-                vqa_pred = self.vqa_model(self.vqa_model.preprocess_vgg16(fake_img), batch["q_embedding"])
+                vqa_pred = self.vqa_model(self.vqa_model.preprocess_img(fake_img), batch["q_embedding"])
                 self.test_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
                 self.log('VQA/Test', self.test_vqa_acc, on_epoch=True, on_step=False)
 

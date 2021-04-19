@@ -1,18 +1,18 @@
-CONFIG_NAME: "easy_vqa_sbert"
+CONFIG_NAME: "easy_vqa"
 
 DATASET_NAME: "easy_vqa"
 DATA_DIR: "/home/nino/Documents/Datasets/ExtEasyVQA/"
 N_WORKERS: 12
 IM_SIZE: 224
 
-# MODEL:
-#   CNN_TYPE: "cnn"
-#   EF_TYPE: "phoc_reduced"
-#   ATTENTION: False
-#   N_HIDDEN: 256
+MODEL:
+  # CNN_TYPE: "cnn"
+  # EF_TYPE: "phoc_reduced"
+  # ATTENTION: False
+  N_HIDDEN: 256
 
 TRAIN:
   BATCH_SIZE: 24 #default 24
   MAX_EPOCH: 50
-  LR: 0.0002
+  LR: 0.002
   CHECKPOINT: ""

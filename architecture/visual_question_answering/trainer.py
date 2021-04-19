@@ -38,20 +38,20 @@ class VQA(pl.LightningModule):
                 k = 6
             else:
                 k = 49
-            self._example_input_array = (
+            self.example_input_array = (
                 torch.ones(1, self.embedding_generator.dim, k),
                 torch.ones(1, self.cfg.MODEL.EF_DIM))
         else:
             if cfg.MODEL.CNN_TYPE == "cnn":
                 self.model = SimpleVQA(self.cfg.IM_SIZE, self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
                                        self.cfg.MODEL.N_HIDDEN)
-                self._example_input_array = (
+                self.example_input_array = (
                     torch.ones(1, 3, self.cfg.IM_SIZE, self.cfg.IM_SIZE),
                     torch.ones(1, self.cfg.MODEL.EF_DIM))
             else:
                 self.model = PretrainedVQA(self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
                                            self.cfg.MODEL.N_HIDDEN, im_dim=self.embedding_generator.dim)
-                self._example_input_array = (
+                self.example_input_array = (
                     torch.ones(1, self.embedding_generator.dim),
                     torch.ones(1, self.cfg.MODEL.EF_DIM))
         self.start = time.perf_counter()
@@ -76,7 +76,7 @@ class VQA(pl.LightningModule):
         if self.cfg.MODEL.CNN_TYPE != "cnn":
             # Get image features if not default cnn
             if len(batch["img_embedding"].shape) == 1:
-                img = self.embedding_generator.process_batch(batch["img"], transform=True)
+                img = self.preprocess_img(batch["img"])
             else:
                 img = batch["img_embedding"]
 
@@ -94,7 +94,7 @@ class VQA(pl.LightningModule):
         img = batch["img"]
         if self.cfg.MODEL.CNN_TYPE != "cnn":
             if len(batch["img_embedding"].shape) == 1:
-                img = self.embedding_generator.process_batch(batch["img"], transform=True)
+                img = self.preprocess_img(batch["img"])
             else:
                 img = batch["img_embedding"]
         y_pred = self(img, batch["q_embedding"])
@@ -104,10 +104,7 @@ class VQA(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
       #  y_pred = self(batch["img_embedding"], batch["q_embedding"])
-        img = batch["img"]
-        if self.cfg.MODEL.CNN_TYPE != "cnn":
-            img = self.embedding_generator.process_batch(batch["img"], transform=True)
-        y_pred = self(img, batch["q_embedding"])
+        y_pred = self(self.preprocess_img(batch["img"]), batch["q_embedding"])
 
         self.test_acc(F.softmax(y_pred, dim=1), batch["target"])
         self.log('Acc/Test', self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
@@ -122,6 +119,11 @@ class VQA(pl.LightningModule):
         opt = torch.optim.Adam(self.model.parameters(), lr=self.lr, betas=(0, 0.999))
        # opt = torch.optim.SGD(self.parameters(), lr=0.001, momentum=0.9)
         return opt
+
+    def preprocess_img(self, images):
+        if self.cfg.MODEL.CNN_TYPE != "cnn":
+            images = self.embedding_generator.process_batch(images, transform=True)
+        return images
 
     def get_progress_bar_dict(self):
         # don't show the version number

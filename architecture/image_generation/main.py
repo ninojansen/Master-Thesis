@@ -23,11 +23,12 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a DAMSM network')
     parser.add_argument('--cfg', dest='cfg_file',
                         help='optional config file',
-                        default='cfg/easyVQA/ext_sbert.yml', type=str)
+                        default='cfg/easyVQA/default.yml', type=str)
     parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
     parser.add_argument('--ckpt', dest='ckpt', type=str, default=None)
     parser.add_argument('--gan', dest='gan', type=str, default=None)
+    parser.add_argument('--ef_type', dest='ef_type', type=str, default=None)
     parser.add_argument('--type', dest='type', type=str, default="no_pretrain")
     parser.add_argument('--test', dest='test', action="store_true", default=False)
     parser.add_argument("--iterator", dest='iterator', type=str, default="image")
@@ -46,11 +47,12 @@ if __name__ == "__main__":
 
     if args.max_epochs:
         cfg.TRAIN.MAX_EPOCH = args.max_epochs
-
     if args.gan:
         cfg.MODEL.GAN = args.gan
     if args.num_workers:
         cfg.N_WORKERS = args.num_workers
+    if args.ef_type:
+        cfg.MODEL.EF_TYPE = args.ef_type
     print('Using config:')
     pprint.pprint(cfg)
 
@@ -96,11 +98,12 @@ if __name__ == "__main__":
     vqa_model = None
     if cfg.TRAIN.VQA_CHECKPOINT:
         vqa_model = VQA.load_from_checkpoint(cfg.TRAIN.VQA_CHECKPOINT)
+
     version = datetime.now().strftime("%d-%m_%H:%M:%S")
     if args.type == "all" or args.type == "vae" or args.type == "pretrain":
         # VAE training
         vae_logger = vae_logger = TensorBoardLogger(
-            args.output_dir, name=cfg.CONFIG_NAME, version=f"{cfg.CONFIG_NAME}_vae_{version}")
+            args.output_dir, name=cfg.MODEL.EF_TYPE, version=f"vae_{version}")
         vae_trainer = vae_trainer = pl.Trainer.from_argparse_args(
             args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=vae_logger, default_root_dir=args.output_dir)
 
@@ -118,8 +121,8 @@ if __name__ == "__main__":
             vae_trainer.fit(vae_model, datamodule)
 
         if args.type == "all" or args.type == "pretrain":
-            pretrained_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME,
-                                                  version=f"{cfg.CONFIG_NAME}_pretrained_{version}")
+            pretrained_logger = TensorBoardLogger(args.output_dir, name=cfg.MODEL.EF_TYPE,
+                                                  version=f"pretrained_{version}")
             pretrained_trainer = pl.Trainer.from_argparse_args(
                 args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=pretrained_logger,
                 default_root_dir=args.output_dir)
@@ -138,8 +141,8 @@ if __name__ == "__main__":
                 print(pretrained_result)
 
     if args.type == "all" or args.type == "no_pretrain":
-        full_logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME,
-                                        version=f"{cfg.CONFIG_NAME}_non_pretrained_{version}")
+        full_logger = TensorBoardLogger(args.output_dir, name=cfg.MODEL.EF_TYPE,
+                                        version=f"non_pretrained_{version}")
         full_trainer = pl.Trainer.from_argparse_args(
             args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=full_logger,
             default_root_dir=args.output_dir)
