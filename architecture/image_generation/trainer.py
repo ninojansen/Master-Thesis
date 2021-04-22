@@ -13,6 +13,7 @@ from architecture.utils.inception_score import InceptionScore
 from architecture.image_generation.model import NetD, NetG
 from architecture.utils.utils import gen_image_grid, weights_init, generate_figure
 from easydict import EasyDict as edict
+from architecture.embeddings.image.generator import ImageEmbeddingGenerator
 
 cifar10_label_names = {0: "airplane", 1: "automobile", 2: "bird", 3: "cat",
                        4: "deer", 5: "dog", 6: "frog", 7: "horse", 8: "ship", 9: "truck"}
@@ -28,10 +29,10 @@ class VAE_DFGAN(pl.LightningModule):
         self.cfg = cfg
         self.save_hyperparameters(self.cfg)
 
-        self.encoder = NetD(cfg.MODEL.NF, cfg.IM_SIZE,
+        self.encoder = NetD(cfg.MODEL.NG, cfg.IM_SIZE,
                             cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=False)
         self.encoder.apply(weights_init)
-        self.decoder = NetG(cfg.MODEL.NF, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
+        self.decoder = NetG(cfg.MODEL.ND, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
         self.decoder.apply(weights_init)
         self.kl_loss = lambda mu, logvar: -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
@@ -127,9 +128,10 @@ class DFGAN(pl.LightningModule):
         if pretrained_encoder:
             self.generator = pretrained_encoder
         else:
-            self.generator = NetG(cfg.MODEL.NF, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
+            self.generator = NetG(cfg.MODEL.NG, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
         self.generator.apply(weights_init)
-        self.discriminator = NetD(cfg.MODEL.NF, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=True)
+        self.discriminator = NetD(cfg.MODEL.ND, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=True)
+
         self.discriminator.apply(weights_init)
         self.opt_g, self.opt_d = self.configure_optimizers()
 
@@ -142,6 +144,8 @@ class DFGAN(pl.LightningModule):
             self.train_vqa_acc = pl.metrics.Accuracy()
             self.val_vqa_acc = pl.metrics.Accuracy()
             self.test_vqa_acc = pl.metrics.Accuracy()
+
+        self.track_norm = True
 
     def on_pretrain_routine_start(self):
         self.logger.experiment.add_graph(
@@ -159,6 +163,8 @@ class DFGAN(pl.LightningModule):
     def training_step(self, batch, batch_idx, optimizer_idx):
       #  (opt_g, opt_d) = self.optimizers()
         real_img = batch["img"]
+        # Add noise following https://arxiv.org/pdf/1701.04862.pdf
+        real_img = real_img + torch.randn_like(real_img)
         text_embed = batch["qa_embedding"]
 
         self.eval_y = text_embed
@@ -170,6 +176,7 @@ class DFGAN(pl.LightningModule):
 
         # Prediction on the real data
         real_pred = self.discriminator(real_img, text_embed)
+
         d_acc_real = self.real_acc(
             torch.sigmoid(real_pred),
             torch.ones(batch_size, 1, dtype=torch.int32).cuda())
@@ -177,14 +184,14 @@ class DFGAN(pl.LightningModule):
      #   d_loss_real = F.binary_cross_entropy_with_logits(real_pred, real)
         # Prediction on the mismatched/wrong labeled data
         wrong_pred = self.discriminator(real_img, text_embed.roll(1))
+
         d_loss_wrong = torch.nn.ReLU()(1.0 + wrong_pred).mean()
        # d_loss_wrong = F.binary_cross_entropy_with_logits(wrong_pred, fake)
         # Forward pass
         noise = torch.randn(batch_size, 100).type_as(real_img)
         fake_img = self.generator(noise, text_embed)
-
         # Prediction on the generated images
-        fake_pred = self.discriminator(fake_img.detach(), text_embed)
+        fake_pred = self.discriminator(fake_img.detach() + torch.randn_like(fake_img), text_embed)
         d_acc_fake = self.fake_acc(torch.sigmoid(fake_pred),
                                    torch.zeros(batch_size, dtype=torch.int32).cuda())
         d_loss_fake = torch.nn.ReLU()(1.0 + fake_pred).mean()
@@ -195,6 +202,14 @@ class DFGAN(pl.LightningModule):
         self.opt_g.zero_grad()
         self.manual_backward(d_loss, self.opt_d)
        # self.manual_optimizer_step(self.opt_d)
+      #  torch.nn.utils.clip_grad_norm_(self.parameters(), 100)
+        # if self.track_norm:
+        #     total_norm = 0
+        #     for p in self.discriminator.parameters():
+        #         param_norm = p.grad.data.norm(2)
+        #         total_norm += param_norm.item() ** 2
+        #     total_norm = total_norm ** (1. / 2)
+        #     self.log("Norm/Disc", total_norm)
         self.opt_d.step()
 
         self.log("Loss/Real", d_loss_real, on_step=False, on_epoch=True)
@@ -204,7 +219,7 @@ class DFGAN(pl.LightningModule):
         self.log("Acc/Real", d_acc_real, on_step=False, on_epoch=True, prog_bar=True)
         self.log("Acc/Fake", d_acc_fake, on_step=False, on_epoch=True, prog_bar=True)
 
-        # 2. Matching aware gradient penalty on the discriminator
+      #  2. Matching aware gradient penalty on the discriminator
         interpolated = real_img.requires_grad_()
         sent_inter = text_embed.requires_grad_()
         out = self.discriminator(real_img, text_embed)
@@ -222,7 +237,6 @@ class DFGAN(pl.LightningModule):
         self.opt_d.zero_grad()
         self.opt_g.zero_grad()
         self.manual_backward(d_loss_gp, self.opt_d)
-       # self.manual_optimizer_step(self.opt_d)
         self.opt_d.step()
         self.log("Loss/GradientPenalty", d_loss_gp, on_step=False, on_epoch=True)
 
@@ -232,9 +246,14 @@ class DFGAN(pl.LightningModule):
     #    g_loss = F.binary_cross_entropy_with_logits(fake_pred, real)
         self.opt_g.zero_grad()
         self.opt_d.zero_grad()
-        self.manual_backward(g_loss, self.opt_g)
-     #   self.manual_optimizer_step(self.opt_g)
 
+       # self.manual_backward(g_loss, self.opt_g)
+     #   self.manual_optimizer_step(self.opt_g)
+        self.log("Loss/Generator", g_loss, on_step=False, on_epoch=True, prog_bar=True)
+
+        g_loss.backward(retain_graph=True)
+        self.opt_g.step()
+       # x1 = sum([torch.sum(p.data) for p in self.generator.parameters()])
         if self.vqa_model:
             if self.cfg.TRAIN.VQA_LAMBDA == 0:
                 with torch.no_grad():
@@ -242,12 +261,26 @@ class DFGAN(pl.LightningModule):
             else:
                 vqa_pred = self.vqa_model(self.vqa_model.preprocess_img(fake_img), batch["q_embedding"])
                 vqa_loss = F.cross_entropy(vqa_pred, batch["target"]) * self.cfg.TRAIN.VQA_LAMBDA
-                self.manual_backward(vqa_loss, self.opt_g)
-            self.train_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
-            self.log('VQA/Train', self.train_vqa_acc, on_step=False, on_epoch=True)
+                self.train_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
+                grad = torch.autograd.grad(outputs=vqa_loss, inputs=fake_img,
+                                           grad_outputs=torch.ones(vqa_loss.size()), allow_unused=True)
+                vqa_loss.backward()
+                # vqa_loss.backward()
 
-        self.opt_g.step()
-        self.log("Loss/Generator", g_loss, on_step=False, on_epoch=True, prog_bar=True)
+                self.opt_g.step()
+                # self.manual_backward(vqa_loss, self.opt_g)
+
+                self.log("Loss/VQA", vqa_loss, on_step=False, on_epoch=True, prog_bar=False)
+                self.log('VQA/Train', self.train_vqa_acc, on_step=False, on_epoch=True)
+        # x2 = sum([torch.sum(p.data) for p in self.generator.parameters()])
+        # x = 0
+        # if self.track_norm:
+        #     total_norm = 0
+        #     for p in self.generator.parameters():
+        #         param_norm = p.grad.data.norm(2)
+        #         total_norm += param_norm.item() ** 2
+        #     total_norm = total_norm ** (1. / 2)
+        #     self.log("Norm/Gen", total_norm)
 
     def validation_step(self, batch, batch_idx):
         text_embed = batch["qa_embedding"]
@@ -320,10 +353,12 @@ class DFGAN(pl.LightningModule):
                 global_step=self.current_epoch)
 
     def configure_optimizers(self):
+       # betas = (0, 0.9)
+        betas = (0, 0.999)
         opt_g = torch.optim.Adam(self.generator.parameters(),
-                                 lr=self.cfg.TRAIN.G_LR, betas=(0, 0.999))
+                                 lr=self.cfg.TRAIN.G_LR, betas=betas)
         opt_d = torch.optim.Adam(self.discriminator.parameters(),
-                                 lr=self.cfg.TRAIN.D_LR, betas=(0, 0.999))
+                                 lr=self.cfg.TRAIN.D_LR, betas=betas)
         return opt_g, opt_d
 
     def get_progress_bar_dict(self):

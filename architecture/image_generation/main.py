@@ -58,8 +58,6 @@ if __name__ == "__main__":
         cfg.MODEL.EF_TYPE = args.ef_type
     if args.data_dir:
         cfg.DATA_DIR = args.data_dir
-    print('Using config:')
-    pprint.pprint(cfg)
 
     # --fast_dev_run // Does 1 batch and 1 epoch for quick
     # --precision 16 // for 16-bit precision
@@ -96,6 +94,9 @@ if __name__ == "__main__":
             embedding_type=cfg.MODEL.EF_TYPE, im_size=cfg.IM_SIZE)
 
     cfg.MODEL.EF_DIM = datamodule.get_ef_dim(combined=True)
+    print('Using config:')
+    pprint.pprint(cfg)
+
     # Initialize loggers
     # version = 1
     # if os.path.isdir(os.path.join(args.output_dir, cfg.CONFIG_NAME)):

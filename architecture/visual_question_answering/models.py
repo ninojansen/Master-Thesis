@@ -70,8 +70,8 @@ class PretrainedVQA(nn.Module):
         super(PretrainedVQA, self).__init__()
         self.n_answers = n_answers
         self.im_dim = im_dim
-        self.l2_norm = True
         self.n_hidden = n_hidden
+
         self.fc1 = nn.Linear(im_dim, n_hidden)
         self.question = nn.Sequential(nn.Linear(ef_dim, n_hidden), nn.ReLU())
         self.out = nn.Sequential(

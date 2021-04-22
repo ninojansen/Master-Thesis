@@ -23,7 +23,8 @@ __C.TRAIN.VQA_CHECKPOINT = ''
 __C.TRAIN.VQA_LAMBDA = 0.0
 
 __C.MODEL = edict()
-__C.MODEL.NF = 8
+__C.MODEL.NG = 8
+__C.MODEL.ND = 8
 __C.MODEL.Z_DIM = 100
 __C.MODEL.EF_DIM = 10
 __C.MODEL.EF_TYPE = "sbert"
