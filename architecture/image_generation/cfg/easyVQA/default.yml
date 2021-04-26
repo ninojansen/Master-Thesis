@@ -3,11 +3,11 @@ CONFIG_NAME: "easy_vqa"
 DATASET_NAME: "easy_vqa"
 DATA_DIR: "/home/nino/Documents/Datasets/ExtEasyVQA/"
 N_WORKERS: 12
-IM_SIZE: 64
+IM_SIZE: 128
 
 MODEL:
-  ND: 16
-  NG: 32
+  ND: 14
+  NG: 16
   Z_DIM: 100
   EF_TYPE: "sbert_reduced"
   GAN: "DFGAN"

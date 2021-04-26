@@ -80,9 +80,11 @@ class DataGenerator:
 
     def create_img(self, attr_list):
         # attr(0)=Shape attr(1)=Color attr(2)=Size attr(3)=Location
-        arrn = np.random.normal(loc=225, scale=5, size=(self.IM_DRAW_SIZE, self.IM_DRAW_SIZE))
-        im = Image.fromarray(arrn)
-        im = im.convert("RGB")
+        # arrn = np.random.normal(loc=255, scale=0, size=(self.IM_DRAW_SIZE, self.IM_DRAW_SIZE))
+        # im = Image.fromarray(arrn)
+        # im = im.convert("RGB")
+        im = Image.new('RGB', (self.IM_DRAW_SIZE, self.IM_DRAW_SIZE),
+                       (randint(230, 255), randint(230, 255), randint(230, 255)))
         draw = ImageDraw.Draw(im)
         for attr in attr_list:
             self.draw_shape(draw, attr[0], attr[1], attr[2], attr[3])
@@ -1023,9 +1025,10 @@ class DataGenerator:
                 (x + s * math.cos(self.TRIANGLE_ANGLE_2), y + s * math.sin(self.TRIANGLE_ANGLE_2)),
             ], fill=color.value)
 
+
         # else:
         #     raise Exception('Invalid shape!')
 if __name__ == "__main__":
    # data_dir = "/data/s2965690/datasets/ExtEasyVQA/"
     data_dir = "/home/nino/Documents/Datasets/ExtEasyVQA/"
-    generator = DataGenerator(data_dir, 64, 10000)
+    generator = DataGenerator(data_dir, 224, 10000)

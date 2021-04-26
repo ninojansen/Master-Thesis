@@ -10,13 +10,11 @@ import torchvision
 import time
 import numpy as np
 from architecture.utils.inception_score import InceptionScore
+from architecture.utils.fid_score import FrechetInceptionDistance
 from architecture.image_generation.model import NetD, NetG
 from architecture.utils.utils import gen_image_grid, weights_init, generate_figure
 from easydict import EasyDict as edict
 from architecture.embeddings.image.generator import ImageEmbeddingGenerator
-
-cifar10_label_names = {0: "airplane", 1: "automobile", 2: "bird", 3: "cat",
-                       4: "deer", 5: "dog", 6: "frog", 7: "horse", 8: "ship", 9: "truck"}
 
 
 class VAE_DFGAN(pl.LightningModule):
@@ -145,6 +143,7 @@ class DFGAN(pl.LightningModule):
             self.val_vqa_acc = pl.metrics.Accuracy()
             self.test_vqa_acc = pl.metrics.Accuracy()
 
+        self.fid = FrechetInceptionDistance()
         self.track_norm = True
 
     def on_pretrain_routine_start(self):
@@ -291,9 +290,11 @@ class DFGAN(pl.LightningModule):
 
         fake_img = self.forward(noise, text_embed)
 
-        incep_mean, incep_std = self.inception.compute_score(fake_img, num_splits=1)
+      #  incep_mean, incep_std = self.inception.compute_score(fake_img, num_splits=1)
 
-        self.log("Inception/Val", incep_mean, on_step=False, on_epoch=True)
+        # if not self.trainer.running_sanity_check:
+        self.inception.compute_statistics(fake_img)
+        self.fid.compute_statistics(batch["img"], fake_img)
 
         if self.vqa_model:
             with torch.no_grad():
@@ -305,6 +306,13 @@ class DFGAN(pl.LightningModule):
         #    # grid = torchvision.utils.make_grid(fake_x, normalize=True)
         #     self.logger.experiment.add_image(f"Val epoch {self.current_epoch}",
         #                                      grid, global_step=self.current_epoch)
+
+    def on_validation_epoch_end(self):
+        fid_score = self.fid.compute_fid()
+        is_mean, is_std = self.inception.compute_score()
+        self.log("FID/Val", fid_score)
+        self.log("Inception/Val_Mean", is_mean)
+        self.log("Inception/Val_Std", is_std)
 
     def test_step(self, batch, batch_idx):
         text_embed = batch["qa_embedding"]

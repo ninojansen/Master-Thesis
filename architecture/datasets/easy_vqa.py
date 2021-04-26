@@ -265,6 +265,7 @@ class EasyVQADataset(data.Dataset):
     def __getitem__(self, index):
         if self.iterator == "question":
             question = self.questions[index]["question"]
+            question_json = self.questions[index]
             answer = self.questions[index]["answer"]
             image_idx = self.questions[index]["image_id"]
         elif self.iterator == "image":
@@ -272,9 +273,11 @@ class EasyVQADataset(data.Dataset):
             qa_list = self.imgToQA[str(image_idx)]
             qa = random.choice(qa_list)
             question = qa["question"]
+            question_json = qa["question"]
             answer = qa["answer"]
         else:
             question = self.questions[index]["question"]
+            question_json = self.questions[index]
             answer = self.questions[index]["answer"]
             image_idx = self.questions[index]["image_id"]
 
@@ -292,7 +295,7 @@ class EasyVQADataset(data.Dataset):
         else:
             img_embedding = 0
 
-        return {'img_path': f"{self.split}_{image_idx}.png", "target": self.answers[answer], "img": img, "img_embedding": img_embedding, "question": question, "answer": answer, "text": text, "qa_embedding": qa_embedding, "q_embedding": q_embedding}
+        return {'img_path': f"{self.split}_{image_idx}.png", "target": self.answers[answer], "img": img, "img_embedding": img_embedding, "question": question, "answer": answer, "text": text, "qa_embedding": qa_embedding, "q_embedding": q_embedding, "question_json": question_json}
 
     def __len__(self):
         if self.iterator == "question":

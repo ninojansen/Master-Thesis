@@ -24,19 +24,17 @@ from torchvision import models
 class InceptionScore:
 
     def __init__(self):
-        self.inception_model = INCEPTION_V3().cuda()
+        self.inception_model = models.inception_v3(pretrained=True, transform_input=False).cuda()
+        self.inception_model.eval()
 
-    def compute_score(self, data, num_splits=1, precomputed=False):
-        if not precomputed:
-            self.inception_model.eval()
-            data = self.inception_model(data)
-        data = data.cpu().numpy()
-        N = data.shape[0]
+        self.act = None
+
+    def compute_score(self, splits=10):
         # Now compute the mean kl-div
         split_scores = []
-
-        for k in range(num_splits):
-            part = data[k * (N // num_splits): (k + 1) * (N // num_splits), :]
+        N = self.act.shape[0]
+        for k in range(splits):
+            part = self.act[k * (N // splits): (k + 1) * (N // splits), :]
             py = np.mean(part, axis=0)
             scores = []
             for i in range(part.shape[0]):
@@ -44,10 +42,22 @@ class InceptionScore:
                 scores.append(entropy(pyx, py))
             split_scores.append(np.exp(np.mean(scores)))
 
+        self.act = None
         return np.mean(split_scores), np.std(split_scores)
 
+    def compute_statistics(self, batch):
+        real_features = self.inception_model
+        batch = nn.Upsample(size=(299, 299), mode='bilinear')(batch)
+        pred = self.inception_model(batch)
+        pred = F.softmax(pred, dim=0).data.cpu().numpy()
 
-class INCEPTION_V3(nn.Module):
+        if isinstance(self.act, np.ndarray):
+            self.act = np.vstack([self.act, pred])
+        else:
+            self.act = pred
+
+
+class Inception_V3(nn.Module):
     def __init__(self):
         super(INCEPTION_V3, self).__init__()
         self.model = models.inception_v3(pretrained=True, progress=True)
