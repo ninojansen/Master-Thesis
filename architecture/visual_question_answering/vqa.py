@@ -23,7 +23,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a DAMSM network')
     parser.add_argument('--cfg', dest='cfg_file',
                         help='optional config file',
-                        default='cfg/easyVQA/sbert_attention.yml', type=str)
+                        default='cfg/easyVQA/default.yml', type=str)
     parser.add_argument('--data_dir', dest='data_dir', type=str, default=None)
     parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
@@ -34,6 +34,7 @@ def parse_args():
     parser.add_argument('--ef_type', dest='ef_type', type=str, default=None)
     parser.add_argument('--n_hidden', dest='n_hidden', type=int, default=None)
     parser.add_argument('--cnn_type', dest='cnn_type', type=str, default=None)
+    parser.add_argument('--type', dest='type', type=str, default=None)
     parser.add_argument('--attention', dest='attention', action="store_true", default=False)
     parser.add_argument('--lr', dest='lr', type=float, default=None)
 
@@ -64,6 +65,8 @@ if __name__ == "__main__":
         cfg.MODEL.CNN_TYPE = args.cnn_type
     if args.attention:
         cfg.MODEL.ATTENTION = args.attention
+    if args.type:
+        cfg.MODEL.TYPE = args.type
     if args.lr:
         cfg.TRAIN.LR = args.lr
     if args.config_name:

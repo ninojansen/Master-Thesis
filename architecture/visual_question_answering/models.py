@@ -65,6 +65,80 @@ class SimpleVQA(nn.Module):
         return z
 
 
+class VisionVQA(nn.Module):
+    def __init__(self, im_size, n_answers, n_hidden):
+        super(VisionVQA, self).__init__()
+        self.n_answers = n_answers
+        self.im_size = im_size
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(3, 6, 5, stride=1, padding=2),
+            nn.BatchNorm2d(6),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2))
+
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(6, 16, 5, stride=1, padding=2),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2))
+
+        self.conv3 = nn.Sequential(nn.Conv2d(16, 32, 5, stride=1, padding=2), nn.BatchNorm2d(32), nn.ReLU(),
+                                   nn.MaxPool2d(2, 2))
+        self.conv4 = nn.Sequential(nn.Conv2d(32, 64, 5, stride=1, padding=2), nn.BatchNorm2d(64), nn.ReLU(),
+                                   nn.MaxPool2d(2, 2))
+
+        self.im_dim = int(((im_size / 2**4)**2)) * 64
+        self.out = nn.Sequential(
+            nn.Linear(self.im_dim, n_hidden),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(n_hidden, n_answers))
+
+    def forward(self, x, y):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
+
+        x = x.view(-1, self.im_dim)
+        return self.out(x)
+
+
+class PretrainedVisionVQA(nn.Module):
+    def __init__(self, n_answers, n_hidden, im_dim):
+        super(PretrainedVisionVQA, self).__init__()
+        self.n_answers = n_answers
+        self.im_dim = im_dim
+        self.n_hidden = n_hidden
+
+        self.out = nn.Sequential(
+            nn.Linear(im_dim, n_hidden),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(n_hidden, n_answers))
+        self.apply(weights_init)
+
+    def forward(self, img, question):
+        return self.out(img)
+
+
+class LanguageVQA(nn.Module):
+    def __init__(self, ef_dim, n_answers, n_hidden):
+        super(LanguageVQA, self).__init__()
+        self.n_answers = n_answers
+        self.n_hidden = n_hidden
+        self.question = nn.Sequential(
+            nn.Linear(ef_dim, n_hidden),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(n_hidden, n_answers))
+        self.apply(weights_init)
+
+    def forward(self, img, question):
+        return self.question(question)
+
+
 class PretrainedVQA(nn.Module):
     def __init__(self, ef_dim, n_answers, n_hidden, im_dim=None):
         super(PretrainedVQA, self).__init__()

@@ -49,8 +49,10 @@ class DataGenerator:
         self.TRIANGLE_ANGLE_1 = 0
         self.TRIANGLE_ANGLE_2 = -math.pi / 3
 
-        self.MAX_EXTRA = [0, 1, 2]
-        self.MAX_EXTRA_COEFF = [0.55, 0.35, 0.10]
+        self.MAX_EXTRA = [0, 1]
+        self.MAX_EXTRA_COEFF = [0.75, 0.25]
+        #self.MAX_EXTRA = [0, 1, 2]
+        #self.MAX_EXTRA_COEFF = [0.55, 0.35, 0.10]
         self.RELATIVE_POSITIONS = ["to the left of", "to the right of", "above", "below"]
 
         self.num2words_dict = {0: "zero", 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five',
@@ -80,11 +82,12 @@ class DataGenerator:
 
     def create_img(self, attr_list):
         # attr(0)=Shape attr(1)=Color attr(2)=Size attr(3)=Location
-        # arrn = np.random.normal(loc=255, scale=0, size=(self.IM_DRAW_SIZE, self.IM_DRAW_SIZE))
-        # im = Image.fromarray(arrn)
-        # im = im.convert("RGB")
-        im = Image.new('RGB', (self.IM_DRAW_SIZE, self.IM_DRAW_SIZE),
-                       (randint(230, 255), randint(230, 255), randint(230, 255)))
+        arrn = np.random.normal(loc=225, scale=0, size=(self.IM_DRAW_SIZE, self.IM_DRAW_SIZE))
+        im = Image.fromarray(arrn)
+        im = im.convert("RGB")
+
+        # im = Image.new('RGB', (self.IM_DRAW_SIZE, self.IM_DRAW_SIZE),
+        #                (randint(230, 255), randint(230, 255), randint(230, 255)))
         draw = ImageDraw.Draw(im)
         for attr in attr_list:
             self.draw_shape(draw, attr[0], attr[1], attr[2], attr[3])
@@ -1031,4 +1034,4 @@ class DataGenerator:
 if __name__ == "__main__":
    # data_dir = "/data/s2965690/datasets/ExtEasyVQA/"
     data_dir = "/home/nino/Documents/Datasets/ExtEasyVQA/"
-    generator = DataGenerator(data_dir, 224, 10000)
+    generator = DataGenerator(data_dir, 128, 15000)

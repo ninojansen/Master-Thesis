@@ -8,25 +8,24 @@ cfg = __C
 __C.DATASET_NAME = 'easyvqa'
 __C.CONFIG_NAME = ''
 __C.DATA_DIR = ''
-
-__C.IG = edict()
-__C.IG.CHECKPOINT = ''
-
-__C.VQA = edict()
-__C.VQA.CHECKPOINT = ''
+__C.N_WORKERS = 12
+__C.IM_SIZE = 64
 
 # Training options
 __C.TRAIN = edict()
+__C.TRAIN.TYPE = "finetune_vqa"
 __C.TRAIN.BATCH_SIZE = 64
 __C.TRAIN.MAX_EPOCH = 601
 __C.TRAIN.LR = 0.0002
+__C.TRAIN.LC = 0.5
+__C.TRAIN.LA = 0.5
 __C.TRAIN.CHECKPOINT = ''
 
 __C.MODEL = edict()
-__C.MODEL.IM_DIM = 4096
-__C.MODEL.EF_DIM = 128
-__C.MODEL.EF_TYPE = "bow"
-__C.MODEL.N_ANSWERS = 12
+__C.MODEL.IG = ""
+__C.MODEL.VQA = ""
+__C.MODEL.EF_TYPE = "sbert_reduced"
+
 __C.TEST = edict()
 __C.TEST.CHECKPOINT = ''
 

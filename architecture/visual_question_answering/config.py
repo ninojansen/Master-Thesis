@@ -25,6 +25,7 @@ __C.MODEL.EF_TYPE = "bow"
 __C.MODEL.ATTENTION = False
 __C.MODEL.N_ANSWERS = 12
 __C.MODEL.N_HIDDEN = 32
+__C.MODEL.TYPE = "all"
 __C.TEST = edict()
 __C.TEST.CHECKPOINT = ''
 

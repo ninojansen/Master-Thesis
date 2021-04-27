@@ -10,10 +10,11 @@ MODEL:
   EF_TYPE: "sbert_reduced"
   ATTENTION: True
   N_HIDDEN: 256
+  TYPE: "language"
 
 TRAIN:
   BATCH_SIZE: 24 #default 24
-  MAX_EPOCH: 30
+  MAX_EPOCH: 5
   LR: 0.002
   CHECKPOINT: ""
 

@@ -3,13 +3,14 @@ CONFIG_NAME: "easy_vqa_sbert"
 DATASET_NAME: "easy_vqa"
 DATA_DIR: "/home/nino/Documents/Datasets/ExtEasyVQA/"
 N_WORKERS: 12
-IM_SIZE: 128
+IM_SIZE: 64
 
 MODEL:
   CNN_TYPE: "vgg16_flat"
   EF_TYPE: "sbert_reduced"
   ATTENTION: False
   N_HIDDEN: 256
+  TYPE: "vision"
 
 TRAIN:
   BATCH_SIZE: 24 #default 24

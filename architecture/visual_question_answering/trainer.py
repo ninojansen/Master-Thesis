@@ -11,7 +11,7 @@ from torch.optim import optimizer
 import torchvision
 import time
 from architecture.utils.inception_score import InceptionScore
-from architecture.visual_question_answering.models import SimpleVQA, PretrainedVQA, AttentionVQA
+from architecture.visual_question_answering.models import SimpleVQA, PretrainedVQA, AttentionVQA, VisionVQA, LanguageVQA, PretrainedVisionVQA
 from easydict import EasyDict as edict
 from architecture.utils.utils import weights_init
 from torchvision import datasets, models, transforms
@@ -38,22 +38,36 @@ class VQA(pl.LightningModule):
                 k = 6
             else:
                 k = 49
-            self.example_input_array = (
-                torch.ones(1, self.embedding_generator.dim, k),
-                torch.ones(1, self.cfg.MODEL.EF_DIM))
+            # self.example_input_array = (
+            #     torch.ones(1, self.embedding_generator.dim, k),
+            #     torch.ones(1, self.cfg.MODEL.EF_DIM))
         else:
             if cfg.MODEL.CNN_TYPE == "cnn":
-                self.model = SimpleVQA(self.cfg.IM_SIZE, self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
-                                       self.cfg.MODEL.N_HIDDEN)
-                self.example_input_array = (
-                    torch.ones(1, 3, self.cfg.IM_SIZE, self.cfg.IM_SIZE),
-                    torch.ones(1, self.cfg.MODEL.EF_DIM))
+                if cfg.MODEL.TYPE == "language":
+                    self.model = LanguageVQA(self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
+                                             self.cfg.MODEL.N_HIDDEN)
+                elif cfg.MODEL.TYPE == "vision":
+                    self.model = VisionVQA(self.cfg.IM_SIZE, self.cfg.MODEL.N_ANSWERS,
+                                           self.cfg.MODEL.N_HIDDEN)
+                else:
+                    self.model = SimpleVQA(self.cfg.IM_SIZE, self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
+                                           self.cfg.MODEL.N_HIDDEN)
+                # self.example_input_array = (
+                #     torch.ones(1, 3, self.cfg.IM_SIZE, self.cfg.IM_SIZE),
+                #     torch.ones(1, self.cfg.MODEL.EF_DIM))
             else:
-                self.model = PretrainedVQA(self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
-                                           self.cfg.MODEL.N_HIDDEN, im_dim=self.embedding_generator.dim)
-                self.example_input_array = (
-                    torch.ones(1, self.embedding_generator.dim),
-                    torch.ones(1, self.cfg.MODEL.EF_DIM))
+                if cfg.MODEL.TYPE == "language":
+                    self.model = LanguageVQA(self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
+                                             self.cfg.MODEL.N_HIDDEN)
+                elif cfg.MODEL.TYPE == "vision":
+                    self.model = PretrainedVisionVQA(self.cfg.MODEL.N_ANSWERS,
+                                                     self.cfg.MODEL.N_HIDDEN, self.embedding_generator.dim)
+                else:
+                    self.model = PretrainedVQA(self.cfg.MODEL.EF_DIM, self.cfg.MODEL.N_ANSWERS,
+                                               self.cfg.MODEL.N_HIDDEN, im_dim=self.embedding_generator.dim)
+                # self.example_input_array = (
+                #     torch.ones(1, self.embedding_generator.dim),
+                #     torch.ones(1, self.cfg.MODEL.EF_DIM))
         self.start = time.perf_counter()
 
         # self.metrics = {

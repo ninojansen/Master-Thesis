@@ -64,7 +64,11 @@ class ImageEmbeddingGenerator():
 
     def process_batch(self, images, transform=False):
         with torch.no_grad():
+
             if transform:
+                # [-1 to 1] range so convert to [0, 1]
+                if torch.min(images) < 0:
+                    images = (images + 1) / 2
                 images = F.interpolate(images, size=224)
                 images.sub_(self.norm_mean).div_(self.norm_std)
             if self.extension == "frcnn":

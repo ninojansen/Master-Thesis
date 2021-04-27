@@ -14,7 +14,7 @@ import pprint
 import argparse
 from pl_bolts.datamodules import CIFAR10DataModule
 from architecture.visual_question_answering.trainer import VQA
-from architecture.image_generation.VAE.trainers.dfgan_trainer import DFGAN
+from architecture.image_generation.trainer import DFGAN
 from datetime import datetime
 from architecture.cycle.trainer import Cycle
 
@@ -26,6 +26,8 @@ def parse_args():
                         default='cfg/easy_vqa.yml', type=str)
     parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
+    parser.add_argument('--data_dir', dest='data_dir', type=str, default=None)
+    parser.add_argument('--type', dest='type', type=str, default=None)
     parser.add_argument('--test', dest='test', action="store_true", default=False)
     parser = pl.Trainer.add_argparse_args(parser)
     parser.set_defaults(gpus=-1)
@@ -43,15 +45,13 @@ if __name__ == "__main__":
     if args.max_epochs:
         cfg.TRAIN.MAX_EPOCH = args.max_epochs
 
-    print('Using config:')
-    pprint.pprint(cfg)
+    if args.data_dir:
+        cfg.DATA_DIR = args.data_dir
+    if args.type:
+        cfg.MODEL.TYPE = args.type
 
     if args.num_workers:
-        num_workers = args.num_workers
-    elif args.gpus == -1:
-        num_workers = 4 * torch.cuda.device_count()
-    else:
-        num_workers = 4 * args.gpus
+        cfg.N_WORKERS = args.num_workers
 
     # --fast_dev_run // Does 1 batch and 1 epoch for quick
     # --precision 16 // for 16-bit precision
@@ -66,28 +66,34 @@ if __name__ == "__main__":
     datamodule = None
     answer_map = None
 
-    vqa_model = VQA.load_from_checkpoint(cfg.VQA.CHECKPOINT)
-    ig_model = DFGAN.load_from_checkpoint(cfg.IG.CHECKPOINT)
+    vqa_model = VQA.load_from_checkpoint(cfg.MODEL.VQA)
+    ig_model = DFGAN.load_from_checkpoint(cfg.MODEL.IG)
 
     if vqa_model.cfg.MODEL.EF_TYPE != ig_model.cfg.MODEL.EF_TYPE:
         raise NameError(
             f"VQA embedding type: {vqa_model.cfg.MODEL.EF_TYPE} does not match IG embedding type {ig_model.cfg.MODEL.EF_TYPE}")
 
-    ef_type = vqa_model.cfg.MODEL.EF_TYPE
+    cfg.MODEL.EF_TYPE = vqa_model.cfg.MODEL.EF_TYPE
     if cfg.DATASET_NAME == "easy_vqa":
+        if cfg.TRAIN.TYPE == "finetune_vqa":
+            iterator = "question"
+        else:
+            iterator = "image"
         datamodule = EasyVQADataModule(
-            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=num_workers,
-            pretrained_images=True, pretrained_text=True, text_embed_type=ef_type)
+            data_dir=cfg.DATA_DIR, batch_size=cfg.TRAIN.BATCH_SIZE, num_workers=cfg.N_WORKERS, im_size=cfg.IM_SIZE,
+            pretrained_text=True, text_embed_type=cfg.MODEL.EF_TYPE, cnn_type=vqa_model.cfg.MODEL.CNN_TYPE, iterator=iterator)
 
         answer_map = datamodule.get_answer_map()
+
+    print('Using config:')
+    pprint.pprint(cfg)
     version = datetime.now().strftime("%d-%m_%H:%M:%S")
 
     cycle_model = Cycle(cfg, vqa_model, ig_model, answer_map)
 
     logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, version=f"cycle_{version}")
     trainer = pl.Trainer.from_argparse_args(
-        args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=logger, default_root_dir=args.output_dir,
-        automatic_optimization=False)
+        args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=logger, default_root_dir=args.output_dir)
 
     # trainer.tune(model)
     # print(f"==============Training {cfg.CONFIG_NAME} model==============")

@@ -100,7 +100,8 @@ class EasyVQADataModule(pl.LightningDataModule):
     def get_answer_map(self):
         answers_file = os.path.join(self.data_dir, "answers.txt")
         with open(answers_file, 'r') as file:
-            answers = dict((key, value.strip()) for key, value in enumerate(file))
+            answers = dict(
+                (key, (value.strip(), self.answer_embeddings[value.strip()])) for key, value in enumerate(file))
         return answers
 
     def generate_text_embeds(self, type="sbert"):
@@ -170,7 +171,10 @@ class EasyVQADataModule(pl.LightningDataModule):
         val_dataset = EasyVQADataset(self.data_dir, split="val", norm=norm, iterator="image")
         generator = ImageEmbeddingGenerator(self.data_dir, self.cnn_type)
 
-        batch_size = 1
+        if self.cnn_type == "frcnn":
+            batch_size = 1
+        else:
+            batch_size = 24
 
         train_outdir = os.path.join(self.data_dir, "train", 'embeddings', generator.extension)
         if not os.path.exists(train_outdir):

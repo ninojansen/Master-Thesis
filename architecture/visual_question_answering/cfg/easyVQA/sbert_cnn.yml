@@ -6,10 +6,11 @@ N_WORKERS: 12
 IM_SIZE: 224
 
 MODEL:
-  CNN_TYPE: "resnet18"
+  CNN_TYPE: "cnn"
   EF_TYPE: "sbert_reduced"
-  ATTENTION: True
+  ATTENTION: False
   N_HIDDEN: 256
+  TYPE: "language"
 
 TRAIN:
   BATCH_SIZE: 24 #default 24

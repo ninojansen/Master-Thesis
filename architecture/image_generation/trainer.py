@@ -191,6 +191,7 @@ class DFGAN(pl.LightningModule):
         fake_img = self.generator(noise, text_embed)
         # Prediction on the generated images
         fake_pred = self.discriminator(fake_img.detach() + torch.randn_like(fake_img), text_embed)
+        #fake_pred = self.discriminator(fake_img.detach(), text_embed)
         d_acc_fake = self.fake_acc(torch.sigmoid(fake_pred),
                                    torch.zeros(batch_size, dtype=torch.int32).cuda())
         d_loss_fake = torch.nn.ReLU()(1.0 + fake_pred).mean()
@@ -316,31 +317,31 @@ class DFGAN(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         text_embed = batch["qa_embedding"]
-        batch_size = self.cfg.TRAIN.BATCH_SIZE
-        # Generate images
-        noise = torch.randn(batch_size, self.cfg.MODEL.Z_DIM).type_as(text_embed)
+    #     batch_size = self.cfg.TRAIN.BATCH_SIZE
+    #     # Generate images
+    #     noise = torch.randn(batch_size, self.cfg.MODEL.Z_DIM).type_as(text_embed)
 
-        fake_img = self.forward(noise, text_embed)
+    #     fake_img = self.forward(noise, text_embed)
 
-        incep_mean, incep_std = self.inception.compute_score(fake_img, num_splits=1)
+    #    # incep_mean, incep_std = self.inception.compute_score(fake_img, num_splits=1)
 
-        self.log("Inception/Test", incep_mean, on_step=False, on_epoch=True)
+    #    # self.log("Inception/Test", incep_mean, on_step=False, on_epoch=True)
 
-        if self.vqa_model:
-            with torch.no_grad():
-                vqa_pred = self.vqa_model(self.vqa_model.preprocess_img(fake_img), batch["q_embedding"])
-                self.test_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
-                self.log('VQA/Test', self.test_vqa_acc, on_epoch=True, on_step=False)
+    #     if self.vqa_model:
+    #         with torch.no_grad():
+    #             vqa_pred = self.vqa_model(self.vqa_model.preprocess_img(fake_img), batch["q_embedding"])
+    #             self.test_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
+    #             self.log('VQA/Test', self.test_vqa_acc, on_epoch=True, on_step=False)
 
-        val_images = []
-        for img, text in zip(fake_img, batch["text"]):
-            val_images.append(generate_figure(img, text))
-        self.logger.experiment.add_images(
-            f"Test/Batch_{batch_idx}", torch.stack(val_images),
-            global_step=self.current_epoch)
-        #    # grid = torchvision.utils.make_grid(fake_x, normalize=True)
-        #     self.logger.experiment.add_image(f"Val epoch {self.current_epoch}",
-        #                                      grid, global_step=self.current_epoch)
+    #     val_images = []
+    #     for img, text in zip(fake_img, batch["text"]):
+    #         val_images.append(generate_figure(img, text))
+    #     self.logger.experiment.add_images(
+    #         f"Test/Batch_{batch_idx}", torch.stack(val_images),
+    #         global_step=self.current_epoch)
+    #     #    # grid = torchvision.utils.make_grid(fake_x, normalize=True)
+    #     #     self.logger.experiment.add_image(f"Val epoch {self.current_epoch}",
+    #     #                                      grid, global_step=self.current_epoch)
 
     def on_epoch_end(self):
         elapsed_time = time.perf_counter() - self.start
