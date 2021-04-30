@@ -160,10 +160,11 @@ class DFGAN(pl.LightningModule):
         return self.generator(x, y)
 
     def training_step(self, batch, batch_idx, optimizer_idx):
+        noise_decay = 2 ** (-0.5 * self.current_epoch)
       #  (opt_g, opt_d) = self.optimizers()
         real_img = batch["img"]
         # Add noise following https://arxiv.org/pdf/1701.04862.pdf
-        real_img = real_img + torch.randn_like(real_img)
+        real_img = real_img + torch.randn_like(real_img) * noise_decay
         text_embed = batch["qa_embedding"]
 
         self.eval_y = text_embed
@@ -190,7 +191,7 @@ class DFGAN(pl.LightningModule):
         noise = torch.randn(batch_size, 100).type_as(real_img)
         fake_img = self.generator(noise, text_embed)
         # Prediction on the generated images
-        fake_pred = self.discriminator(fake_img.detach() + torch.randn_like(fake_img), text_embed)
+        fake_pred = self.discriminator(fake_img.detach() + torch.randn_like(fake_img) * noise_decay, text_embed)
         #fake_pred = self.discriminator(fake_img.detach(), text_embed)
         d_acc_fake = self.fake_acc(torch.sigmoid(fake_pred),
                                    torch.zeros(batch_size, dtype=torch.int32).cuda())

@@ -1,20 +1,20 @@
 from enum import Enum
 
 
-class Shape(Enum):
+class Shape(int, Enum):
     RECTANGLE = 1
     CIRCLE = 2
     TRIANGLE = 3
    # SQUARE = 4
 
 
-class Size(Enum):
+class Size(int, Enum):
     SMALL = 1
     MEDIUM = 2
     LARGE = 3
 
 
-class Color(Enum):
+class Color(tuple, Enum):
     BLACK = (0, 0, 0)
     #WHITE = (255, 255, 255)
     GRAY = (128, 128, 128)
@@ -29,7 +29,7 @@ class Color(Enum):
     VIOLET = (238, 130, 238)
 
 
-class Location(Enum):
+class Location(tuple, Enum):
     # x_min, x_max, y_min, y_max %
     TOP_LEFT = (0, 0.5, 0, 0.5)
     TOP = (0, 1, 0, 0.5)

@@ -50,7 +50,7 @@ class DataGenerator:
         self.TRIANGLE_ANGLE_2 = -math.pi / 3
 
         self.MAX_EXTRA = [0, 1]
-        self.MAX_EXTRA_COEFF = [0.75, 0.25]
+        self.MAX_EXTRA_COEFF = [0.5, 0.5]
         #self.MAX_EXTRA = [0, 1, 2]
         #self.MAX_EXTRA_COEFF = [0.55, 0.35, 0.10]
         self.RELATIVE_POSITIONS = ["to the left of", "to the right of", "above", "below"]
@@ -292,9 +292,9 @@ class DataGenerator:
         for attr in attr_list:
             # Color
             questions.append({"question": f"Which color is the {self._name(attr[0])}?", "answer": self._name(
-                attr[1]), "type": "color", "specificity": 1, "bool": False, "image_id": image_id})
+                attr[1]), "type": "color", "specificity": 1, "bool": False, "image_id": image_id, "attr": [attr[0], attr[1]]})
             questions.append({"question": f"Which color can the {self._name(attr[0])} be considered?", "answer": self._name(
-                attr[1]), "type": "color", "specificity": 1, "bool": False, "image_id": image_id})
+                attr[1]), "type": "color", "specificity": 1, "bool": False, "image_id": image_id, "attr": [attr[0], attr[1]]})
 
             for c in Color:
                 answer = "no"
@@ -302,45 +302,45 @@ class DataGenerator:
                     answer = "yes"
                 questions.append(
                     {"question": f"Is the {self._name(attr[0])} {self._name(c)}?", "answer": answer, "type": "color",
-                     "specificity": 1, "bool": True, "image_id": image_id})
+                     "specificity": 1, "bool": True, "image_id": image_id, "attr": [attr[0], c]})
             # Size
             questions.append({"question": f"Which size is the {self._name(attr[0])}?", "answer": self._name(
-                attr[2]), "type": "size", "specificity": 1, "bool": False, "image_id": image_id})
+                attr[2]), "type": "size", "specificity": 1, "bool": False, "image_id": image_id, "attr": [attr[0], attr[2]]})
             questions.append({"question": f"How large is the {self._name(attr[0])}?", "answer": self._name(
-                attr[2]), "type": "size", "specificity": 1, "bool": False, "image_id": image_id})
+                attr[2]), "type": "size", "specificity": 1, "bool": False, "image_id": image_id, "attr": [attr[0], attr[2]]})
             for s in Size:
                 answer = "no"
                 if attr[2] == s:
                     answer = "yes"
                 questions.append(
                     {"question": f"Is the {self._name(attr[0])} {self._name(s)}?", "answer": answer, "type": "size",
-                     "specificity": 2, "bool": True, "image_id": image_id})
+                     "specificity": 2, "bool": True, "image_id": image_id, "attr": [attr[0], s]})
 
             # Color + Size
             questions.append({"question": f"Which color is the {self._name(attr[2])} {self._name(attr[0])}?", "answer": self._name(
-                attr[1]), "type": "color", "specificity": 2, "bool": False, "image_id": image_id})
+                attr[1]), "type": "color", "specificity": 2, "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[2]]})
             questions.append(
                 {"question": f"Which color can the {self._name(attr[2])} {self._name(attr[0])} be considered?",
                  "answer": self._name(attr[1]),
                  "type": "color", "specificity": 2,
-                 "bool": False, "image_id": image_id})
+                 "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[2]]})
 
             questions.append({"question": f"Which size is the {self._name(attr[1])} {self._name(attr[0])}?", "answer": self._name(
-                attr[2]), "type": "size", "specificity": 2, "bool": False, "image_id": image_id})
+                attr[2]), "type": "size", "specificity": 2, "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[2]]})
             questions.append({"question": f"How large is the {self._name(attr[1])} {self._name(attr[0])}?", "answer": self._name(
-                attr[2]), "type": "size", "specificity": 2, "bool": False, "image_id": image_id})
+                attr[2]), "type": "size", "specificity": 2, "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[2]]})
             if n_shapes == 1:
                 # Non-binary
                 # Color
                 questions.append({"question": f"Which color can the shape be considered?", "answer": self._name(
-                    attr[1]), "type": "color", "specificity": 0, "bool": False, "image_id": image_id})
+                    attr[1]), "type": "color", "specificity": 0, "bool": False, "image_id": image_id, "attr": [attr[1]]})
                 questions.append({"question": f"Which color is the shape?", "answer": self._name(
-                    attr[1]), "type": "color", "specificity": 0, "bool": False, "image_id": image_id})
+                    attr[1]), "type": "color", "specificity": 0, "bool": False, "image_id": image_id, "attr": [attr[1]]})
                 # Size
                 questions.append({"question": f"Which size can the shape be considered?", "answer": self._name(
-                    attr[2]), "type": "size", "specificity": 0, "bool": False, "image_id": image_id})
+                    attr[2]), "type": "size", "specificity": 0, "bool": False, "image_id": image_id, "attr": [attr[2]]})
                 questions.append({"question": f"How large is the shape?", "answer": self._name(
-                    attr[2]), "type": "size", "specificity": 0, "bool": False, "image_id": image_id})
+                    attr[2]), "type": "size", "specificity": 0, "bool": False, "image_id": image_id, "attr": [attr[2]]})
 
         for s in Shape:
             answer = "no"
@@ -349,12 +349,12 @@ class DataGenerator:
                     answer = "yes"
                     break
             # Existance questions
-            questions.append({"question": f"Is there a {self._name(s)} present?",
-                              "answer": answer, "type": "shape", "specificity": 1, "bool": True, "image_id": image_id})
-            questions.append({"question": f"Is there a {self._name(s)}?",
-                              "answer": answer, "type": "shape", "specificity": 1, "bool": True, "image_id": image_id})
-            questions.append({"question": f"Does the image contain a {self._name(s)}?",
-                              "answer": answer, "type": "shape", "specificity": 1, "bool": True, "image_id": image_id})
+            questions.append({"question": f"Is there a {self._name(s)} present?", "answer": answer,
+                              "type": "shape", "specificity": 1, "bool": True, "image_id": image_id, "attr": [s]})
+            questions.append({"question": f"Is there a {self._name(s)}?", "answer": answer,
+                              "type": "shape", "specificity": 1, "bool": True, "image_id": image_id, "attr": [s]})
+            questions.append({"question": f"Does the image contain a {self._name(s)}?", "answer": answer,
+                              "type": "shape", "specificity": 1, "bool": True, "image_id": image_id, "attr": [s]})
 
             for size in Size:
                 # Binary
@@ -364,12 +364,15 @@ class DataGenerator:
                         answer = "yes"
                         break
                 # Size + Shape
-                questions.append({"question": f"Is there a {self._name(size)} {self._name(s)} present?",
-                                  "answer": answer, "type": "size", "specificity": 2, "bool": True, "image_id": image_id})
-                questions.append({"question": f"Is there a {self._name(size)} {self._name(s)}?",
-                                  "answer": answer, "type": "size", "specificity": 2, "bool": True, "image_id": image_id})
-                questions.append({"question": f"Does the image contain a {self._name(size)} {self._name(s)}?",
-                                  "answer": answer, "type": "size", "specificity": 2, "bool": True, "image_id": image_id})
+                questions.append(
+                    {"question": f"Is there a {self._name(size)} {self._name(s)} present?", "answer": answer,
+                     "type": "size", "specificity": 2, "bool": True, "image_id": image_id, "attr": [size, s]})
+                questions.append(
+                    {"question": f"Is there a {self._name(size)} {self._name(s)}?", "answer": answer, "type": "size",
+                     "specificity": 2, "bool": True, "image_id": image_id, "attr": [size, s]})
+                questions.append(
+                    {"question": f"Does the image contain a {self._name(size)} {self._name(s)}?", "answer": answer,
+                     "type": "size", "specificity": 2, "bool": True, "image_id": image_id, "attr": [size, s]})
                 # Size
                 answer = "no"
                 for attr in attr_list:
@@ -378,10 +381,10 @@ class DataGenerator:
                         break
                     questions.append(
                         {"question": f"Is there a {self._name(size)} shape present?", "answer": answer, "type": "size",
-                         "specificity": 1, "bool": True, "image_id": image_id})
+                         "specificity": 1, "bool": True, "image_id": image_id, "attr": [size]})
                     questions.append(
                         {"question": f"Does the image contain a {self._name(size)} shape?", "answer": answer,
-                         "type": "size", "specificity": 1, "bool": True, "image_id": image_id})
+                         "type": "size", "specificity": 1, "bool": True, "image_id": image_id, "attr": [size]})
 
                 for c in Color:
                     answer = "no"
@@ -393,13 +396,13 @@ class DataGenerator:
                     # Color + Shape
                     questions.append(
                         {"question": f"Is there a {self._name(c)} {self._name(s)} present?", "answer": answer,
-                         "type": "color", "specificity": 2, "bool": True, "image_id": image_id})
+                         "type": "color", "specificity": 2, "bool": True, "image_id": image_id, "attr": [c, s]})
                     questions.append(
                         {"question": f"Is there a {self._name(c)} {self._name(s)}?", "answer": answer, "type": "color",
-                         "specificity": 2, "bool": True, "image_id": image_id})
+                         "specificity": 2, "bool": True, "image_id": image_id, "attr": [c, s]})
                     questions.append(
                         {"question": f"Does the image contain a {self._name(c)} {self._name(s)}?", "answer": answer,
-                         "type": "color", "specificity": 2, "bool": True, "image_id": image_id})
+                         "type": "color", "specificity": 2, "bool": True, "image_id": image_id, "attr": [c, s]})
 
                     answer = "no"
                     for attr in attr_list:
@@ -409,10 +412,10 @@ class DataGenerator:
                     # Color
                     questions.append(
                         {"question": f"Is there a {self._name(c)} shape present?", "answer": answer, "type": "color",
-                         "specificity": 1, "bool": True, "image_id": image_id})
+                         "specificity": 1, "bool": True, "image_id": image_id, "attr": [c]})
                     questions.append(
                         {"question": f"Does the image contain a {self._name(c)} shape?", "answer": answer,
-                         "type": "color", "specificity": 1, "bool": True, "image_id": image_id})
+                         "type": "color", "specificity": 1, "bool": True, "image_id": image_id, "attr": [c]})
 
                     # Color + Size
                     answer = "no"
@@ -422,10 +425,11 @@ class DataGenerator:
                             break
                     questions.append(
                         {"question": f"Is there a {self._name(c)} {self._name(size)} shape present?", "answer": answer,
-                         "type": "shape", "specificity": 2, "bool": True, "image_id": image_id})
+                         "type": "shape", "specificity": 2, "bool": True, "image_id": image_id, "attr": [c, size]})
                     questions.append(
                         {"question": f"Does the image contain a {self._name(c)} {self._name(size)} shape?",
-                         "answer": answer, "type": "shape", "specificity": 2, "bool": True, "image_id": image_id})
+                         "answer": answer, "type": "shape", "specificity": 2, "bool": True, "image_id": image_id,
+                         "attr": [c, size]})
 
                     # Color + Shape + Size
                     answer = "no"
@@ -436,14 +440,15 @@ class DataGenerator:
                     questions.append(
                         {"question": f"Is there a {self._name(size)} {self._name(c)} {self._name(s)} present?",
                             "answer": answer, "type": "shape", "specificity": 3,
-                            "bool": True, "image_id": image_id})
+                            "bool": True, "image_id": image_id, "attr": [size, c, s]})
                     questions.append(
                         {"question": f"Is there a {self._name(size)} {self._name(c)} {self._name(s)}?",
-                         "answer": answer, "type": "shape", "specificity": 3, "bool": True, "image_id": image_id})
+                         "answer": answer, "type": "shape", "specificity": 3, "bool": True, "image_id": image_id,
+                         "attr": [size, c, s]})
                     questions.append(
                         {"question": f"Does the image contain a {self._name(size)} {self._name(c)} {self._name(s)}?",
                             "answer": answer, "type": "shape", "specificity": 3,
-                            "bool": True, "image_id": image_id})
+                            "bool": True, "image_id": image_id, "attr": [size, c, s]})
 
         return questions
 
@@ -465,7 +470,7 @@ class DataGenerator:
                 if found:
                     break
             questions.append({"question": f"Are there any shapes overlapping?", "answer": answer,
-                              "type": "location", "specificity": 0, "bool": True, "image_id": image_id})
+                              "type": "location", "specificity": 0, "bool": True, "image_id": image_id, "attr": []})
 
             # for attr1 in attr_list:
             #     found = False
@@ -485,106 +490,106 @@ class DataGenerator:
                 {"question": f"Where is the {self._name(attr[1])} {self._name(attr[0])} located?",
                     "answer": self._name(attr[3]),
                  "type": "location", "specificity": 2,
-                    "bool": False, "image_id": image_id})
+                    "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[3]]})
             questions.append(
                 {"question": f"Where can you find the {self._name(attr[1])} {self._name(attr[0])}?",
                     "answer": self._name(attr[3]),
                  "type": "location", "specificity": 2,
-                    "bool": False, "image_id": image_id})
+                    "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[3]]})
             questions.append(
                 {"question": f"In which part is the {self._name(attr[1])} {self._name(attr[0])}?",
                     "answer": self._name(attr[3]),
                  "type": "location", "specificity": 2,
-                    "bool": False, "image_id": image_id})
+                    "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[3]]})
             questions.append(
                 {"question": f"In which part is the {self._name(attr[1])} {self._name(attr[0])} placed?",
                     "answer": self._name(attr[3]),
                  "type": "location", "specificity": 2,
-                    "bool": False, "image_id": image_id})
+                    "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[3]]})
             questions.append(
                 {"question": f"Where is the {self._name(attr[1])} {self._name(attr[0])} placed?",
                     "answer": self._name(attr[3]),
                  "type": "location", "specificity": 2,
-                    "bool": False, "image_id": image_id})
+                    "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[3]]})
 
             # Shape + Size
             questions.append(
                 {"question": f"Where is the {self._name(attr[2])} {self._name(attr[0])} located?",
                  "answer": self._name(attr[3]),
                  "type": "location", "specificity": 2,
-                 "bool": False, "image_id": image_id})
+                 "bool": False, "image_id": image_id, "attr": [attr[0], attr[2], attr[3]]})
             questions.append(
                 {"question": f"Where can you find the {self._name(attr[2])} {self._name(attr[0])}?",
                     "answer": self._name(attr[3]),
                  "type": "location", "specificity": 2,
-                    "bool": False, "image_id": image_id})
+                    "bool": False, "image_id": image_id, "attr": [attr[0], attr[2], attr[3]]})
             questions.append(
                 {"question": f"In which part is the {self._name(attr[2])} {self._name(attr[0])}?",
                     "answer": self._name(attr[3]),
                  "type": "location", "specificity": 2,
-                    "bool": False, "image_id": image_id})
+                    "bool": False, "image_id": image_id, "attr": [attr[0], attr[2], attr[3]]})
             questions.append(
                 {"question": f"In which part is the {self._name(attr[2])} {self._name(attr[0])} placed?",
                     "answer": self._name(attr[3]),
                  "type": "location", "specificity": 2,
-                    "bool": False, "image_id": image_id})
+                    "bool": False, "image_id": image_id, "attr": [attr[0], attr[2], attr[3]]})
             questions.append(
                 {"question": f"Where is the {self._name(attr[2])} {self._name(attr[0])} placed?",
                     "answer": self._name(attr[3]),
                  "type": "location", "specificity": 2,
-                    "bool": False, "image_id": image_id})
+                    "bool": False, "image_id": image_id, "attr": [attr[0], attr[2], attr[3]]})
             # Shape + Size + Color
             questions.append(
                 {"question": f"Where is the {self._name(attr[1])} {self._name(attr[2])} {self._name(attr[0])} located?",
                  "answer": self._name(attr[3]),
                  "type": "location", "specificity": 3,
-                 "bool": False, "image_id": image_id})
+                 "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[2], attr[3]]})
             questions.append(
                 {"question": f"Where can you find the {self._name(attr[1])} {self._name(attr[2])} {self._name(attr[0])}?",
                     "answer": self._name(attr[3]),
                  "type": "location", "specificity": 3,
-                    "bool": False, "image_id": image_id})
+                    "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[2], attr[3]]})
             questions.append(
                 {"question": f"In which part is the {self._name(attr[1])} {self._name(attr[2])} {self._name(attr[0])}?",
                     "answer": self._name(attr[3]),
                  "type": "location", "specificity": 3,
-                    "bool": False, "image_id": image_id})
+                    "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[2], attr[3]]})
             questions.append(
                 {"question": f"In which part is the {self._name(attr[1])} {self._name(attr[2])} {self._name(attr[0])} placed?",
                     "answer": self._name(attr[3]),
                  "type": "location", "specificity": 3,
-                    "bool": False, "image_id": image_id})
+                    "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[2], attr[3]]})
             questions.append(
                 {"question": f"Where is the {self._name(attr[1])} {self._name(attr[2])} {self._name(attr[0])} placed?",
                     "answer": self._name(attr[3]),
                  "type": "location", "specificity": 3,
-                    "bool": False, "image_id": image_id})
+                    "bool": False, "image_id": image_id, "attr": [attr[0], attr[1], attr[2], attr[3]]})
             if n_shapes == 1:
                 questions.append(
                     {"question": f"Where is the shape located?",
                         "answer": self._name(attr[3]),
                      "type": "location", "specificity": 0,
-                        "bool": False, "image_id": image_id})
+                        "bool": False, "image_id": image_id, "attr": [attr[3]]})
                 questions.append(
                     {"question": f"Where is the shape placed?",
                         "answer": self._name(attr[3]),
                      "type": "location", "specificity": 0,
-                        "bool": False, "image_id": image_id})
+                        "bool": False, "image_id": image_id, "attr": [attr[3]]})
                 questions.append(
                     {"question": f"Where can you find the shape?",
                         "answer": self._name(attr[3]),
                      "type": "location", "specificity": 0,
-                        "bool": False, "image_id": image_id})
+                        "bool": False, "image_id": image_id, "attr": [attr[3]]})
                 questions.append(
                     {"question": f"In which part is the shape?",
                         "answer": self._name(attr[3]),
                      "type": "location", "specificity": 0,
-                        "bool": False, "image_id": image_id})
+                        "bool": False, "image_id": image_id, "attr": [attr[3]]})
                 questions.append(
                     {"question": f"In which part is the shape placed?",
                         "answer": self._name(attr[3]),
                      "type": "location", "specificity": 0,
-                        "bool": False, "image_id": image_id})
+                        "bool": False, "image_id": image_id, "attr": [attr[3]]})
 
         for l in Location:
             for attr in attr_list:
@@ -593,55 +598,55 @@ class DataGenerator:
                     answer = "yes"
             # Color + Shape
             questions.append(
-                {"question": f"Is there a {self._name(attr[1])} {self._name(attr[0])} on the {self._name(l)}?",
+                {"question": f"Is there a {self._name(attr[1])} {self._name(attr[0])} in the {self._name(l)}?",
                     "answer": answer,
                  "type": "location", "specificity": 3,
-                    "bool": True, "image_id": image_id})
+                    "bool": True, "image_id": image_id, "attr": [attr[0], attr[1], l]})
             questions.append(
-                {"question": f"Is there a {self._name(attr[1])} {self._name(attr[0])} present on the {self._name(l)}?",
+                {"question": f"Is there a {self._name(attr[1])} {self._name(attr[0])} present in the {self._name(l)}?",
                     "answer": answer,
                  "type": "location", "specificity": 3,
-                    "bool": True, "image_id": image_id})
+                    "bool": True, "image_id": image_id, "attr": [attr[0], attr[1], l]})
 
             questions.append(
-                {"question": f"Does the image contain a {self._name(attr[1])} {self._name(attr[0])} on the {self._name(l)}?",
+                {"question": f"Does the image contain a {self._name(attr[1])} {self._name(attr[0])} in the {self._name(l)}?",
                     "answer": answer,
                  "type": "location", "specificity": 3,
-                    "bool": True, "image_id": image_id})
+                    "bool": True, "image_id": image_id, "attr": [attr[0], attr[1], l]})
             # Shape
             questions.append(
-                {"question": f"Is there a {self._name(attr[0])} on the {self._name(l)}?",
+                {"question": f"Is there a {self._name(attr[0])} in the {self._name(l)}?",
                  "answer": answer,
                  "type": "location", "specificity": 2,
-                 "bool": True, "image_id": image_id})
+                 "bool": True, "image_id": image_id, "attr": [attr[0], l]})
             questions.append(
-                {"question": f"Is there a {self._name(attr[0])} present on the {self._name(l)}?",
+                {"question": f"Is there a {self._name(attr[0])} present in the {self._name(l)}?",
                  "answer": answer,
                  "type": "location", "specificity": 2,
-                 "bool": True, "image_id": image_id})
+                 "bool": True, "image_id": image_id, "attr": [attr[0], l]})
 
             questions.append(
-                {"question": f"Does the image contain a {self._name(attr[0])} on the {self._name(l)}?",
+                {"question": f"Does the image contain a {self._name(attr[0])} in the {self._name(l)}?",
                  "answer": answer,
                  "type": "location", "specificity": 2,
-                 "bool": True, "image_id": image_id})
+                 "bool": True, "image_id": image_id, "attr": [attr[0], l]})
             # General
             questions.append(
-                {"question": f"Is there a shape on the {self._name(l)}?",
+                {"question": f"Is there a shape in the {self._name(l)}?",
                  "answer": answer,
                  "type": "location", "specificity": 1,
-                 "bool": True, "image_id": image_id})
+                 "bool": True, "image_id": image_id, "attr": [l]})
             questions.append(
-                {"question": f"Is there a shape present on the {self._name(l)}?",
+                {"question": f"Is there a shape present in the {self._name(l)}?",
                  "answer": answer,
                  "type": "location", "specificity": 1,
-                 "bool": True, "image_id": image_id})
+                 "bool": True, "image_id": image_id, "attr": [l]})
 
             questions.append(
-                {"question": f"Does the image contain a shape on the {self._name(l)}?",
+                {"question": f"Does the image contain a shape in the {self._name(l)}?",
                  "answer": answer,
                  "type": "location", "specificity": 1,
-                 "bool": True, "image_id": image_id})
+                 "bool": True, "image_id": image_id, "attr": [l]})
 
         if n_shapes > 1:
             # Relative positions between shapes
@@ -656,7 +661,7 @@ class DataGenerator:
                                                                  attr2[3],
                                                                  position),
                                  "type": "location", "specificity": 3,
-                                 "bool": True, "image_id": image_id})
+                                 "bool": True, "image_id": image_id, "attr": [attr1[0], attr2[0]]})
 
                             # Color + Shape / Color + Shape
                             questions.append(
@@ -665,7 +670,7 @@ class DataGenerator:
                                                                  attr2[3],
                                                                  position),
                                  "type": "location", "specificity": 3,
-                                 "bool": True, "image_id": image_id})
+                                 "bool": True, "image_id": image_id, "attr": [attr1[0], attr1[1], attr2[0], attr2[1]]})
                             # Shape / Color + Shape
                             questions.append(
                                 {"question": f"Is there a {self._name(attr1[0])} {position} the {self._name(attr2[1])} {self._name(attr2[0])}?",
@@ -673,7 +678,7 @@ class DataGenerator:
                                                                  attr2[3],
                                                                  position),
                                  "type": "location", "specificity": 3,
-                                 "bool": True, "image_id": image_id})
+                                 "bool": True, "image_id": image_id, "attr": [attr1[0], attr2[0], attr2[1]]})
                             # Color + Shape / Color + Shape
                             questions.append(
                                 {"question": f"Is there a {self._name(attr1[1])} {self._name(attr1[0])} {position} the {self._name(attr2[0])}?",
@@ -681,7 +686,7 @@ class DataGenerator:
                                                                  attr2[3],
                                                                  position),
                                  "type": "location", "specificity": 3,
-                                 "bool": True, "image_id": image_id})
+                                 "bool": True, "image_id": image_id, "attr": [attr1[0], attr1[1], attr2[0], ]})
 
             for attr1 in attr_list:
                 for position in self.RELATIVE_POSITIONS:
@@ -697,12 +702,12 @@ class DataGenerator:
                     questions.append(
                         {"question": f"Is there a shape {position} the {self._name(attr1[1])} {self._name(attr1[0])}?",
                          "answer": answer, "type": "location", "specificity": 3,
-                         "bool": True, "image_id": image_id})
+                         "bool": True, "image_id": image_id, "attr": [attr1[0], attr1[1]]})
                     # Shape + Color
                     questions.append(
                         {"question": f"Is there a shape {position} the {self._name(attr1[0])}?", "answer": answer,
                          "type": "location", "specificity": 2,
-                         "bool": True, "image_id": image_id})
+                         "bool": True, "image_id": image_id, "attr": [attr1[0]]})
 
         return questions
 
@@ -712,9 +717,9 @@ class DataGenerator:
         n_shapes = len(attr_list)
 
         questions.append({"question": f"How many shapes are in the image?", "answer": self.num2words(n_shapes),
-                          "type": "count", "specificity": 0, "bool": False, "image_id": image_id})
+                          "type": "count", "specificity": 0, "bool": False, "image_id": image_id, "attr": []})
         questions.append({"question": f"How many objects are in the image?", "answer": self.num2words(n_shapes),
-                          "type": "count", "specificity": 0, "bool": False, "image_id": image_id})
+                          "type": "count", "specificity": 0, "bool": False, "image_id": image_id, "attr": []})
 
         for l in Location:
             answer = 0
@@ -724,19 +729,20 @@ class DataGenerator:
                 if self._name(attr[3]) in self._name(l):
                     answer += 1
             questions.append({"question": f"How many shapes are in the {self._name(l)}?", "answer": self.num2words(
-                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id})
+                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id, "attr": [l]})
             questions.append({"question": f"How many shapes are located in the {self._name(l)}?", "answer": self.num2words(
-                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id})
+                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id, "attr": [l]})
             answer = "no"
             for attr in attr_list:
                 # Make sure that bottom matches bottom_left/right too
                 if self._name(attr[3]) in self._name(l):
                     answer = "yes"
                     break
-            questions.append({"question": f"Are there any shapes on the {self._name(l)}?",
-                              "answer": answer, "type": "count", "specificity": 1, "bool": True, "image_id": image_id})
-            questions.append({"question": f"Are there any shapes located on the {self._name(l)}?",
-                              "answer": answer, "type": "count", "specificity": 1, "bool": True, "image_id": image_id})
+            questions.append({"question": f"Are there any shapes in the {self._name(l)}?", "answer": answer,
+                              "type": "count", "specificity": 1, "bool": True, "image_id": image_id, "attr": [l]})
+            questions.append(
+                {"question": f"Are there any shapes located in the {self._name(l)}?", "answer": answer, "type": "count",
+                 "specificity": 1, "bool": True, "image_id": image_id, "attr": [l]})
 
         for s in Shape:
             answer = 0
@@ -744,15 +750,15 @@ class DataGenerator:
                 if attr[0] == s:
                     answer += 1
             questions.append({"question": f"How many {self._name(s)}s are in the image?", "answer": self.num2words(
-                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id})
+                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id, "attr": [s]})
             if answer > 0:
                 answer = "yes"
             else:
                 answer = "no"
-            questions.append({"question": f"Are there any {self._name(s)}s?",
-                              "answer": answer, "type": "count", "specificity": 1, "bool": True, "image_id": image_id})
-            questions.append({"question": f"Are there any {self._name(s)}s in the image?",
-                              "answer": answer, "type": "count", "specificity": 1, "bool": True, "image_id": image_id})
+            questions.append({"question": f"Are there any {self._name(s)}s?", "answer": answer,
+                              "type": "count", "specificity": 1, "bool": True, "image_id": image_id, "attr": [s]})
+            questions.append({"question": f"Are there any {self._name(s)}s in the image?", "answer": answer,
+                              "type": "count", "specificity": 1, "bool": True, "image_id": image_id, "attr": [s]})
 
             # Dropped these because there are always different colores/sized shapes
             # for c in Color:
@@ -796,17 +802,17 @@ class DataGenerator:
                 if attr[1] == c:
                     answer += 1
             questions.append({"question": f"How many {self._name(c)} shapes are in the image?", "answer": self.num2words(
-                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id})
+                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id, "attr": [c]})
             questions.append({"question": f"How many {self._name(c)} objects are in the image?", "answer": self.num2words(
-                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id})
+                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id, "attr": [c]})
             if answer > 0:
                 answer = "yes"
             else:
                 answer = "no"
-            questions.append({"question": f"Are there any {self._name(c)} shapes?",
-                              "answer": answer, "type": "count", "specificity": 1, "bool": True, "image_id": image_id})
-            questions.append({"question": f"Are there any {self._name(c)} shapes in the image?",
-                              "answer": answer, "type": "count", "specificity": 1, "bool": True, "image_id": image_id})
+            questions.append({"question": f"Are there any {self._name(c)} shapes?", "answer": answer,
+                              "type": "count", "specificity": 1, "bool": True, "image_id": image_id, "attr": [c]})
+            questions.append({"question": f"Are there any {self._name(c)} shapes in the image?", "answer": answer,
+                              "type": "count", "specificity": 1, "bool": True, "image_id": image_id, "attr": [c]})
 
         for s in Size:
             answer = 0
@@ -814,18 +820,18 @@ class DataGenerator:
                 if attr[2] == s:
                     answer += 1
             questions.append({"question": f"How many {self._name(s)} shapes are in the image?", "answer": self.num2words(
-                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id})
+                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id, "attr": [s]})
             questions.append({"question": f"How many {self._name(s)} objects are in the image?", "answer": self.num2words(
-                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id})
+                answer), "type": "count", "specificity": 1, "bool": False, "image_id": image_id, "attr": [s]})
 
             if answer > 0:
                 answer = "yes"
             else:
                 answer = "no"
-            questions.append({"question": f"Are there any {self._name(s)} shapes?",
-                              "answer": answer, "type": "count", "specificity": 1, "bool": True, "image_id": image_id})
-            questions.append({"question": f"Are there {self._name(s)} shapes in the image?",
-                              "answer": answer, "type": "count", "specificity": 1, "bool": True, "image_id": image_id})
+            questions.append({"question": f"Are there any {self._name(s)} shapes?", "answer": answer,
+                              "type": "count", "specificity": 1, "bool": True, "image_id": image_id, "attr": [s]})
+            questions.append({"question": f"Are there {self._name(s)} shapes in the image?", "answer": answer,
+                              "type": "count", "specificity": 1, "bool": True, "image_id": image_id, "attr": [s]})
         return questions
 
     def create_questions_old(self, attr, image_id):
@@ -950,7 +956,7 @@ class DataGenerator:
         return list(map(lambda x: x + (image_id,), all_questions))
 
     def _name(self, attr):
-        if attr == Size.MEDIUM:
+        if type(attr) == Size and attr == Size.MEDIUM:
             return "medium sized"
         return attr.name.lower().replace("_", " ")
 
@@ -972,7 +978,7 @@ class DataGenerator:
         x_min = location.value[0] * self.IM_DRAW_SIZE
         x_max = location.value[1] * self.IM_DRAW_SIZE
         y_min = location.value[2] * self.IM_DRAW_SIZE
-        y_max = location.value[3] * self.IM_DRAW_SIZE
+        y_max = int(location.value[3] * self.IM_DRAW_SIZE * 0.9)
 
         if shape is Shape.RECTANGLE:
             w = 0
@@ -1028,10 +1034,9 @@ class DataGenerator:
                 (x + s * math.cos(self.TRIANGLE_ANGLE_2), y + s * math.sin(self.TRIANGLE_ANGLE_2)),
             ], fill=color.value)
 
-
         # else:
         #     raise Exception('Invalid shape!')
 if __name__ == "__main__":
    # data_dir = "/data/s2965690/datasets/ExtEasyVQA/"
-    data_dir = "/home/nino/Documents/Datasets/ExtEasyVQA/"
+    data_dir = "/home/nino/Documents/Datasets/TestExtEasyVQA/"
     generator = DataGenerator(data_dir, 128, 15000)

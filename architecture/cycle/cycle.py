@@ -16,7 +16,7 @@ from pl_bolts.datamodules import CIFAR10DataModule
 from architecture.visual_question_answering.trainer import VQA
 from architecture.image_generation.trainer import DFGAN
 from datetime import datetime
-from architecture.cycle.trainer import Cycle
+from architecture.cycle.trainer import FinetuneVQA, FinetuneIG
 
 
 def parse_args():
@@ -88,9 +88,10 @@ if __name__ == "__main__":
     print('Using config:')
     pprint.pprint(cfg)
     version = datetime.now().strftime("%d-%m_%H:%M:%S")
-
-    cycle_model = Cycle(cfg, vqa_model, ig_model, answer_map)
-
+    if cfg.TRAIN.TYPE == "finetune_vqa":
+        cycle_model = FinetuneVQA(cfg, vqa_model, ig_model, answer_map)
+    else:
+        cycle_model = FinetuneIG(cfg, vqa_model, ig_model, answer_map)
     logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, version=f"cycle_{version}")
     trainer = pl.Trainer.from_argparse_args(
         args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=logger, default_root_dir=args.output_dir)
