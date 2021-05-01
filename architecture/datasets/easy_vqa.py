@@ -285,6 +285,8 @@ class EasyVQADataset(data.Dataset):
             answer = self.questions[index]["answer"]
             image_idx = self.questions[index]["image_id"]
 
+        # Dataloader cant handle lists in dicts so turn it into a string representation instead
+        question_json["attr"] = ' '.join(str(question_json["attr"]))
         img = self.load_image(image_idx)
         text = f'{question} {answer}'
         qa_embedding = 0

@@ -127,6 +127,6 @@ if __name__ == "__main__":
     trainer.fit(model, datamodule)
 
     print(f"==============Validating final {cfg.CONFIG_NAME} model==============")
-    result = trainer.test(model, test_dataloaders=datamodule.val_dataloader())
+    result = trainer.test(model, test_dataloaders=datamodule.test_dataloader())
     print("Result:")
     print(result)

@@ -6,9 +6,9 @@ N_WORKERS: 12
 IM_SIZE: 64
 
 MODEL:
-  CNN_TYPE: "frcnn"
-  EF_TYPE: "sbert_reduced"
-  ATTENTION: True
+  # CNN_TYPE: "frcnn"
+  # EF_TYPE: "sbert_reduced"
+  # ATTENTION: True
   N_HIDDEN: 256
   TYPE: "all"
 
