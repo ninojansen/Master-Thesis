@@ -42,7 +42,11 @@ class EasyVQADataModule(pl.LightningDataModule):
         self.iterator = iterator
         self.norm = norm
 
-        self.question_embeddings, self.answer_embeddings = self.load_embeddings()
+        if pretrained_text:
+            self.question_embeddings, self.answer_embeddings = None, None
+        else:
+            self.question_embeddings, self.answer_embeddings = self.load_embeddings()
+
         if cnn_type and cnn_type != "cnn":
             self.generate_image_embeddings()
 
@@ -66,9 +70,8 @@ class EasyVQADataModule(pl.LightningDataModule):
         image_transform = transforms.Compose([
             transforms.Resize(int(self.im_size))])
 
-        self.easy_vqa_test = EasyVQADataset(
-            self.data_dir, transform=image_transform, split="test", question_embeddings=self.question_embeddings,
-            answer_embeddings=self.answer_embeddings, norm=self.norm, cnn_type=self.cnn_type, iterator=self.iterator)
+        self.easy_vqa_test = EasyVQADataset(self.data_dir, transform=image_transform,
+                                            split="test", norm=self.norm, cnn_type=self.cnn_type, iterator=self.iterator)
         if stage == 'fit' or stage is None:
             self.easy_vqa_train = EasyVQADataset(
                 self.data_dir, transform=image_transform, split="train", question_embeddings=self.question_embeddings,

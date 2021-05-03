@@ -3,7 +3,7 @@ CONFIG_NAME: "easy_vqa"
 DATASET_NAME: "easy_vqa"
 DATA_DIR: "/home/nino/Documents/Datasets/ExtEasyVQA/"
 N_WORKERS: 12
-IM_SIZE: 64
+IM_SIZE: 128
 
 MODEL:
   # CNN_TYPE: "frcnn"

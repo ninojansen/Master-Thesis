@@ -20,7 +20,7 @@ from architecture.embeddings.image.generator import ImageEmbeddingGenerator
 
 class VQA(pl.LightningModule):
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, text_embedding_generator=None):
         super().__init__()
         if type(cfg) is dict:
             cfg = edict(cfg)
@@ -28,6 +28,7 @@ class VQA(pl.LightningModule):
         self.lr = cfg.TRAIN.LR
         self.save_hyperparameters(self.cfg)
 
+        self.text_embedding_generator = text_embedding_generator
         if cfg.MODEL.CNN_TYPE != "cnn":
             self.embedding_generator = ImageEmbeddingGenerator(cfg.DATA_DIR, cfg.MODEL.CNN_TYPE)
 
@@ -86,7 +87,6 @@ class VQA(pl.LightningModule):
                              "Test/Acc/Spec1": pl.metrics.Accuracy().cuda(),
                              "Test/Acc/Spec2": pl.metrics.Accuracy().cuda(),
                              "Test/Acc/Spec3": pl.metrics.Accuracy().cuda(),
-                             "Test/Acc/Spec4": pl.metrics.Accuracy().cuda(),
                              }
         self.train_acc = pl.metrics.Accuracy()
         self.valid_acc = pl.metrics.Accuracy()
@@ -136,7 +136,9 @@ class VQA(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
       #  y_pred = self(batch["img_embedding"], batch["q_embedding"])
-        y_pred = self(self.preprocess_img(batch["img"]), batch["q_embedding"])
+
+        q_embedding = self.text_embedding_generator.process_batch(batch["question"]).cuda()
+        y_pred = self(self.preprocess_img(batch["img"]), q_embedding.cuda())
 
         bool_pred = [index for index, element in enumerate(batch["question_json"]['bool']) if element]
         open_pred = [index for index, element in enumerate(batch["question_json"]['bool']) if not element]

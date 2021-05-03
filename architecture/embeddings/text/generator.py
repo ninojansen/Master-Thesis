@@ -1,5 +1,6 @@
 
 import os
+import pickle
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))))
 import numpy as np
@@ -23,8 +24,47 @@ import itertools
 
 class TextEmbeddingGenerator():
 
-    def __init__(self,):
-        pass
+    def __init__(self, ef_type=None, data_dir=None):
+        if ef_type:
+            if ef_type == "sbert_full":
+                self.model = SentenceTransformer('distilbert-base-nli-mean-tokens')
+            elif ef_type == "sbert_reduced":
+                self.model = SentenceTransformer('distilbert-base-nli-mean-tokens')
+                with open(os.path.join(data_dir, "sbert_reduced_pca.pkl"), "rb") as fIn:
+                    self.pca = pickle.load(fIn)
+            elif ef_type == "phoc_reduced":
+                with open(os.path.join(data_dir, "phoc_reduced_pca.pkl"), "rb") as fIn:
+                    self.pca = pickle.load(fIn)
+            elif ef_type == "bow":
+                with open(os.path.join(data_dir, "bow_word_to_ix.pkl"), "rb") as fIn:
+                    self.word_to_ix = pickle.load(fIn)
+            self.ef_type = ef_type
+
+    def process_batch(self, texts):
+        tokenizer = RegexpTokenizer(r'\w+')
+        if self.ef_type == "sbert_full" or self.ef_type == "sbert_reduced":
+            embeddings = self.model.encode(texts)
+            if self.ef_type == "sbert_reduced":
+                embeddings = self.pca.transform(embeddings)
+        elif self.ef_type == "phoc_full" or self.ef_type == "phoc_reduced":
+            embeddings = []
+            for text in texts:
+                tokens = tokenizer.tokenize(text)
+                phoc_words = []
+                for word in tokens:
+                    phoc_words.append(self._make_phoc_vector(word))
+                embeddings.append(np.mean(np.vstack(phoc_words), axis=0, dtype=np.float32))
+            embeddings = np.vstack(embeddings)
+            if self.ef_type == "phoc_reduced":
+                embeddings = self.pca.transform(embeddings)
+
+        elif self.ef_type == "bow":
+            embeddings = []
+            for text in texts:
+                tokens = tokenizer.tokenize(text)
+                embeddings.append(self._make_bow_vector(tokens, self.word_to_ix))
+            embeddings = np.vstack(embeddings)
+        return torch.from_numpy(embeddings)
 
     def generate_sbert_embeddings(self, input_dict, model, reduce_features=False):
         dim = None

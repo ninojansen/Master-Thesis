@@ -1,0 +1,6 @@
+,Full,Yes/No,Open,Size,Shape,Color,Location,Count,Spec1,Spec2,Spec3,Path
+ef=sbert_full_nhidden=256_lr=0.002,,,,,,,,,,,,/home/nino/Documents/Models/VQA/vqa_experiment_final/cnn/ef=sbert_full_nhidden=256_lr=0.002/checkpoints/epoch=16-step=63749.ckpt
+ef=phoc_reduced_nhidden=256_lr=0.002,,,,,,,,,,,,/home/nino/Documents/Models/VQA/vqa_experiment_final/cnn/ef=phoc_reduced_nhidden=256_lr=0.002/checkpoints/epoch=14-step=56249-v1.ckpt
+ef=bow_nhidden=256_lr=0.002,,,,,,,,,,,,/home/nino/Documents/Models/VQA/vqa_experiment_final/cnn/ef=bow_nhidden=256_lr=0.002/checkpoints/epoch=12-step=48749.ckpt
+ef=phoc_full_nhidden=256_lr=0.002,,,,,,,,,,,,/home/nino/Documents/Models/VQA/vqa_experiment_final/cnn/ef=phoc_full_nhidden=256_lr=0.002/checkpoints/epoch=13-step=52499.ckpt
+ef=sbert_reduced_nhidden=256_lr=0.002,,,,,,,,,,,,/home/nino/Documents/Models/VQA/vqa_experiment_final/cnn/ef=sbert_reduced_nhidden=256_lr=0.002/checkpoints/epoch=13-step=52499.ckpt
