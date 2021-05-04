@@ -22,8 +22,8 @@ __C.TRAIN.LOSS = "full"
 __C.TRAIN.CHECKPOINT = ''
 
 __C.MODEL = edict()
-__C.MODEL.IG = ""
-__C.MODEL.VQA = ""
+__C.MODEL.IG_CHECKPOINT = ""
+__C.MODEL.VQA_CHECKPOINT = ""
 __C.MODEL.EF_TYPE = "sbert_reduced"
 
 __C.TEST = edict()

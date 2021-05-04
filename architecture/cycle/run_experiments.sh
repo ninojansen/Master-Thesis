@@ -13,7 +13,17 @@ loss_arr=(
     full_coeff
 )
 
+# for loss in "${loss_arr[@]}"; do
+#     export loss
+#     sh finetune_vqa_train.sh
+# done
+
+loss_arr=(
+    vqa_only
+    full
+)
+
 for loss in "${loss_arr[@]}"; do
     export loss
-    sh finetune_vqa_train.sh
+    sh finetune_ig_train.sh
 done

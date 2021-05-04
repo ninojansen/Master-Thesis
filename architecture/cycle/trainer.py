@@ -14,6 +14,7 @@ import time
 from architecture.utils.inception_score import InceptionScore
 from architecture.visual_question_answering.models import SimpleVQA
 from architecture.embeddings.image.generator import ImageEmbeddingGenerator
+from architecture.utils.utils import gen_image_grid, weights_init, generate_figure
 
 
 class FinetuneIG(pl.LightningModule):
@@ -32,7 +33,7 @@ class FinetuneIG(pl.LightningModule):
 
         self.metrics = {"Acc/Train_VQA": pl.metrics.Accuracy().cuda(),
                         "Acc/Val_VQA": pl.metrics.Accuracy().cuda()}
-        self.vqa_opt = self.vqa_model.configure_optimizers()
+        self.ig_opt = self.configure_optimizers()
 
     def forward(self, x, y):
         # in lightning, forward defines the prediction/inference actions
@@ -72,7 +73,7 @@ class FinetuneIG(pl.LightningModule):
             total_loss = vqa_loss
 
         total_loss.backward()
-        self.vqa_opt.step()
+        self.ig_opt.step()
 
         self.metrics["Acc/Train_VQA"](F.softmax(answer, dim=1), batch["target"])
         self.log("Acc/Train_VQA", self.metrics["Acc/Train_VQA"])
@@ -100,6 +101,14 @@ class FinetuneIG(pl.LightningModule):
                 self.metrics["Acc/Val_VQA"](F.softmax(vqa_pred, dim=1), batch["target"])
                 self.log("Acc/Val_VQA", self.metrics["Acc/Val_VQA"], prog_bar=True)
 
+        if not self.trainer.running_sanity_check and batch_idx == 0:
+            val_images = []
+            for img, text in zip(fake_img, batch["text"]):
+                val_images.append(generate_figure(img, text))
+            self.logger.experiment.add_images(
+                f"Val/Epoch_{self.current_epoch}", torch.stack(val_images),
+                global_step=self.current_epoch)
+
     def on_validation_epoch_end(self):
         fid_score = self.ig_model.fid.compute_fid()
         is_mean, is_std = self.ig_model.inception.compute_score()
@@ -117,8 +126,8 @@ class FinetuneIG(pl.LightningModule):
             f"\nEpoch {self.current_epoch} finished in {round(elapsed_time, 2)}s")
 
     def configure_optimizers(self):
-        opt = torch.optim.Adam(self.vqa_model.parameters(), lr=self.cfg.TRAIN.LR)
-        return opt
+        opt_g, _ = self.ig_model.configure_optimizers()
+        return opt_g
 
     def get_progress_bar_dict(self):
         # don't show the version number
@@ -137,14 +146,13 @@ class FinetuneVQA(pl.LightningModule):
         self.ig_model = ig_model
         self.answer_map = answer_map
         self.start = time.perf_counter()
-        self.opt = self.configure_optimizers()
 
         self.embedding_generator = ImageEmbeddingGenerator(cfg.DATA_DIR, "vgg16_flat")
 
         self.metrics = {"Acc/Train_VQA": pl.metrics.Accuracy().cuda(),
                         "Acc/Train_Consistency": pl.metrics.Accuracy().cuda(),
                         "Acc/Val": pl.metrics.Accuracy().cuda()}
-        self.vqa_opt = self.vqa_model.configure_optimizers()
+        self.vqa_opt = self.configure_optimizers()
 
     def forward(self, x, y):
         # in lightning, forward defines the prediction/inference actions
@@ -241,8 +249,7 @@ class FinetuneVQA(pl.LightningModule):
             f"\nEpoch {self.current_epoch} finished in {round(elapsed_time, 2)}s")
 
     def configure_optimizers(self):
-        opt = torch.optim.Adam(self.vqa_model.parameters(), lr=self.cfg.TRAIN.LR)
-        return opt
+        return self.vqa_model.configure_optimizers()
 
     def get_progress_bar_dict(self):
         # don't show the version number

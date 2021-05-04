@@ -53,12 +53,12 @@ if __name__ == "__main__":
     if args.vqa_ckpt:
         cfg.MODEL.VQA_CHECKPOINT = args.vqa_ckpt
     if args.ig_ckpt:
-        cfg.MODEL.VQA_CHECKPOINT = args.ig_ckpt
+        cfg.MODEL.IG_CHECKPOINT = args.ig_ckpt
     if args.loss:
         cfg.TRAIN.LOSS = args.loss
 
-    vqa_model = VQA.load_from_checkpoint(cfg.MODEL.VQA)
-    ig_model = DFGAN.load_from_checkpoint(cfg.MODEL.IG)
+    vqa_model = VQA.load_from_checkpoint(cfg.MODEL.VQA_CHECKPOINT)
+    ig_model = DFGAN.load_from_checkpoint(cfg.MODEL.IG_CHECKPOINT)
 
     if vqa_model.cfg.MODEL.EF_TYPE != ig_model.cfg.MODEL.EF_TYPE:
         raise NameError(

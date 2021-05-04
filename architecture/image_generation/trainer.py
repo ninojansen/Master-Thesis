@@ -302,11 +302,13 @@ class DFGAN(pl.LightningModule):
                 vqa_pred = self.vqa_model(self.vqa_model.preprocess_img(fake_img), batch["q_embedding"])
                 self.val_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
                 self.log('VQA/Val', self.val_vqa_acc, on_step=False, on_epoch=True, prog_bar=True)
-        # if not self.trainer.running_sanity_check and batch_idx == 0:
-        #     grid = gen_image_grid(fake_img, batch["text"])
-        #    # grid = torchvision.utils.make_grid(fake_x, normalize=True)
-        #     self.logger.experiment.add_image(f"Val epoch {self.current_epoch}",
-        #                                      grid, global_step=self.current_epoch)
+        if not self.trainer.running_sanity_check and batch_idx == 0:
+            val_images = []
+            for img, text in zip(fake_img, batch["text"]):
+                val_images.append(generate_figure(img, text))
+            self.logger.experiment.add_images(
+                f"Val/Epoch_{self.current_epoch}", torch.stack(val_images),
+                global_step=self.current_epoch)
 
     def on_validation_epoch_end(self):
         fid_score = self.fid.compute_fid()

@@ -152,10 +152,10 @@ if __name__ == "__main__":
 
             print(f"==============Training {cfg.CONFIG_NAME} model with pretraining==============")
             pretrained_trainer.fit(pretrained_model, datamodule)
-            if args.test:
-                pretrained_result = pretrained_trainer.test(pretrained_model)
-                print("Pretrained result:")
-                print(pretrained_result)
+            # if args.test:
+            #     pretrained_result = pretrained_trainer.test(pretrained_model)
+            #     print("Pretrained result:")
+            #     print(pretrained_result)
 
     if args.type == "all" or args.type == "no_pretrain":
         full_logger = TensorBoardLogger(args.output_dir, name=cfg.MODEL.EF_TYPE,
@@ -173,11 +173,11 @@ if __name__ == "__main__":
         print(f"==============Training {cfg.CONFIG_NAME} model without pretraining==============")
         full_trainer.fit(full_model, datamodule)
 
-        print(f"==============Validating {cfg.CONFIG_NAME} model without pretraining==============")
-        full_trainer.test(test_dataloaders=datamodule.val_dataloader())
+        # print(f"==============Validating {cfg.CONFIG_NAME} model without pretraining==============")
+        # full_trainer.test(test_dataloaders=datamodule.val_dataloader())
 
-        if args.test:
-            full_result = full_trainer.test(full_model)
+        # if args.test:
+        #     full_result = full_trainer.test(full_model)
 
-            print("Non-Pretrained Result:")
-            print(full_result)
+        #     print("Non-Pretrained Result:")
+        #     print(full_result)
