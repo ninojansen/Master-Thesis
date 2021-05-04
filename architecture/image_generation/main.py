@@ -35,6 +35,7 @@ def parse_args():
     parser.add_argument('--type', dest='type', type=str, default="no_pretrain")
     parser.add_argument('--test', dest='test', action="store_true", default=False)
     parser.add_argument("--iterator", dest='iterator', type=str, default="image")
+    parser.add_argument("--vqa_ckpt", dest='vqa_ckpt', type=str, default=None)
     parser = pl.Trainer.add_argparse_args(parser)
     parser.set_defaults(gpus=-1)
     parser.set_defaults(max_epochs=None)
@@ -58,6 +59,8 @@ if __name__ == "__main__":
         cfg.MODEL.EF_TYPE = args.ef_type
     if args.data_dir:
         cfg.DATA_DIR = args.data_dir
+    if args.vqa_ckpt:
+        cfg.VQA_CHECKPOINT = args.vqa_ckpt
 
     # --fast_dev_run // Does 1 batch and 1 epoch for quick
     # --precision 16 // for 16-bit precision

@@ -1,0 +1,22 @@
+CONFIG_NAME: "easy_vqa"
+
+DATASET_NAME: "easy_vqa"
+DATA_DIR: "/home/nino/Documents/Datasets/ExtEasyVQA/"
+N_WORKERS: 12
+IM_SIZE: 128
+
+MODEL:
+  VQA: "/home/nino/Documents/Models/VQA/vqa_experiment_final/top_attention/ef=sbert_reduced_nhidden=256_lr=0.002/checkpoints/epoch=8-step=33749.ckpt"
+  IG: "/home/nino/Dropbox/Documents/Master/Thesis/architecture/image_generation/output/sbert_reduced/non_pretrained_04-05_11:52:43/checkpoints/epoch=4-step=1502.ckpt"
+
+TRAIN:
+  BATCH_SIZE: 24 #default 24
+  MAX_EPOCH: 10
+  LR: 0.0001
+  LC: 1.0
+  LA: 1.0
+  LOSS: "full"
+  CHECKPOINT: ""
+
+TEST:
+  CHECKPOINT: ""

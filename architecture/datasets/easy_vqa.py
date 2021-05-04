@@ -43,9 +43,9 @@ class EasyVQADataModule(pl.LightningDataModule):
         self.norm = norm
 
         if pretrained_text:
-            self.question_embeddings, self.answer_embeddings = None, None
-        else:
             self.question_embeddings, self.answer_embeddings = self.load_embeddings()
+        else:
+            self.question_embeddings, self.answer_embeddings = None, None
 
         if cnn_type and cnn_type != "cnn":
             self.generate_image_embeddings()
@@ -280,7 +280,7 @@ class EasyVQADataset(data.Dataset):
             qa_list = self.imgToQA[str(image_idx)]
             qa = random.choice(qa_list)
             question = qa["question"]
-            question_json = qa["question"]
+            question_json = qa
             answer = qa["answer"]
         else:
             question = self.questions[index]["question"]
@@ -289,7 +289,9 @@ class EasyVQADataset(data.Dataset):
             image_idx = self.questions[index]["image_id"]
 
         # Dataloader cant handle lists in dicts so turn it into a string representation instead
+
         question_json["attr"] = ' '.join(str(question_json["attr"]))
+
         img = self.load_image(image_idx)
         text = f'{question} {answer}'
         qa_embedding = 0

@@ -13,12 +13,12 @@ __C.IM_SIZE = 64
 
 # Training options
 __C.TRAIN = edict()
-__C.TRAIN.TYPE = "finetune_vqa"
 __C.TRAIN.BATCH_SIZE = 64
 __C.TRAIN.MAX_EPOCH = 601
 __C.TRAIN.LR = 0.0002
 __C.TRAIN.LC = 0.5
 __C.TRAIN.LA = 0.5
+__C.TRAIN.LOSS = "full"
 __C.TRAIN.CHECKPOINT = ''
 
 __C.MODEL = edict()

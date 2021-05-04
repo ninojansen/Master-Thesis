@@ -30,13 +30,13 @@ class FinetuneIG(pl.LightningModule):
 
         self.embedding_generator = ImageEmbeddingGenerator(cfg.DATA_DIR, "vgg16_flat")
 
-        self.metrics = {"Train/Acc/VQA": pl.metrics.Accuracy().cuda(),
-                        "Train/Acc/Consistency": pl.metrics.Accuracy().cuda()}
+        self.metrics = {"Acc/Train_VQA": pl.metrics.Accuracy().cuda(),
+                        "Acc/Val_VQA": pl.metrics.Accuracy().cuda()}
         self.vqa_opt = self.vqa_model.configure_optimizers()
 
     def forward(self, x, y):
         # in lightning, forward defines the prediction/inference actions
-        return self.vqa_model(x, y)
+        return self.ig_model(x, y)
 
     def image_consistency_loss(self, real, generated):
         real_features = self.embedding_generator.process_batch(real, transform=True)
@@ -44,72 +44,71 @@ class FinetuneIG(pl.LightningModule):
         return F.cosine_embedding_loss(real_features, generated_features, torch.ones(1).cuda())
 
     def training_step(self, batch, batch_idx):
-        #  1. (I, Q) -> A' through VQA model
-        img = batch["img"]
-        if len(batch["img_embedding"].shape) == 1:
-            img = self.preprocess_img(batch["img"])
+        # 1. (Q, A) -> I through IG model
+        real_img = batch["img"]
+        batch_size = real_img.size(0)
+        noise = torch.randn(batch_size, 100).type_as(real_img)
+        gen_img = self.ig_model(noise, batch["qa_embedding"])
+
+        # 2. (I, Q) -> A' through VQA model
+        answer = self.vqa_model(self.vqa_model.preprocess_img(gen_img), batch["q_embedding"])
+        vqa_loss = self.vqa_model.criterion(answer, batch["target"])
+
+        answer_idx = torch.argmax(answer, dim=1)
+        answer_embedding = torch.from_numpy(
+            np.stack([self.answer_map[int(idx.cpu())][1] for idx in answer_idx])).type_as(answer)
+        cycle_qa_embedding = torch.cat((batch["q_embedding"], answer_embedding), dim=1)
+
+        # 3. (Q, A') -> I'
+        cycle_img = self.ig_model(noise, cycle_qa_embedding)
+
+        self.log("Loss/VQA", vqa_loss)
+        # (I', I) loss
+        if self.cfg.TRAIN.LOSS == "full":
+            image_consistency_loss = self.image_consistency_loss(gen_img, cycle_img)
+            total_loss = vqa_loss + image_consistency_loss
+            self.log("Loss/Image_Consistency", image_consistency_loss)
         else:
-            img = batch["img_embedding"]
-        answer1 = self.vqa_model(img, batch["q_embedding"])
+            total_loss = vqa_loss
 
-        # (A', A) loss
-        vqa_loss = self.vqa_model.criterion(answer1, batch["target"])
-
-        # 2. (Q, A) -> I' through IG model
-        noise = torch.randn(answer1.size(0), 100).type_as(answer1)
-
-        # Combine answer and question embeddings for IG
-        answer1_idx = torch.argmax(answer1, dim=1)
-        answer1_embedding = torch.from_numpy(
-            np.stack([self.answer_map[int(idx.cpu())][1] for idx in answer1_idx])).type_as(answer1)
-
-        qa_embedding = torch.cat((batch["q_embedding"], answer1_embedding), dim=1)
-
-        # Forward pass through IG
-        with torch.no_grad():
-            gen_img = self.ig_model(noise, qa_embedding)
-            # (I, I') loss TODO Figure out what to do with this loss
-            image_consistency_loss = self.image_consistency_loss(batch["img"], gen_img)
-
-        # 3. (I', Q) -> A'' through VQA model
-        answer2 = self.vqa_model(self.vqa_model.preprocess_img(gen_img), batch["q_embedding"])
-        # (A'', A) loss
-        answer_consistency_loss = self.vqa_model.criterion(answer2, batch["target"])
-
-        # total_loss = vqa_loss + self.cfg.TRAIN.LA * answer_consistency_loss + self.cfg.TRAIN.LC * image_consistency_loss
-        cycle_loss = answer_consistency_loss / image_consistency_loss
-        total_loss = vqa_loss + cycle_loss
         total_loss.backward()
         self.vqa_opt.step()
 
-        self.metrics["Train/Acc/VQA"](F.softmax(answer1, dim=1), batch["target"])
-        self.metrics["Train/Acc/Consistency"](F.softmax(answer1, dim=1), batch["target"])
-
-        self.log("Train/Acc/VQA", self.metrics["Train/Acc/VQA"])
-        self.log("Train/Acc/Consistency", self.metrics["Train/Acc/Consistency"])
-
+        self.metrics["Acc/Train_VQA"](F.softmax(answer, dim=1), batch["target"])
+        self.log("Acc/Train_VQA", self.metrics["Acc/Train_VQA"])
         self.log("Loss/Total", total_loss)
-        self.log("Loss/VQA", vqa_loss)
-        self.log("Loss/Answer_Consistency", answer_consistency_loss)
-        self.log("Loss/Image_Consistency", image_consistency_loss)
         return
 
     def validation_step(self, batch, batch_idx):
-        pass
-        # 1. (I, Q) -> A' through VQA model
-        # answer1 = self.vqa_model(batch["img"], batch["q_embedding"])
+        text_embed = batch["qa_embedding"]
 
-        # (A', A) acc
-        # self.val_acc(answer1, batch["target"])
-       # self.log('val_acc', self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
+        batch_size = self.cfg.TRAIN.BATCH_SIZE
+        # Generate images
+        noise = torch.randn(batch_size, self.ig_model.cfg.MODEL.Z_DIM).type_as(text_embed)
+
+        fake_img = self.forward(noise, text_embed)
+
+      #  incep_mean, incep_std = self.inception.compute_score(fake_img, num_splits=1)
+
+        # if not self.trainer.running_sanity_check:
+        self.ig_model.inception.compute_statistics(fake_img)
+        self.ig_model.fid.compute_statistics(batch["img"], fake_img)
+
+        if self.vqa_model:
+            with torch.no_grad():
+                vqa_pred = self.vqa_model(self.vqa_model.preprocess_img(fake_img), batch["q_embedding"])
+                self.metrics["Acc/Val_VQA"](F.softmax(vqa_pred, dim=1), batch["target"])
+                self.log("Acc/Val_VQA", self.metrics["Acc/Val_VQA"], prog_bar=True)
+
+    def on_validation_epoch_end(self):
+        fid_score = self.ig_model.fid.compute_fid()
+        is_mean, is_std = self.ig_model.inception.compute_score()
+        self.log("FID/Val", fid_score)
+        self.log("Inception/Val_Mean", is_mean)
+        self.log("Inception/Val_Std", is_std)
 
     def test_step(self, batch, batch_idx):
-        # 1. (I, Q) -> A' through VQA model
-        answer1 = self.vqa_model(batch["img"], batch["q_embedding"])
-
-        # (A', A) acc
-        self.test_acc(answer1, batch["target"])
-        self.log('test_acc', self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
+        pass
 
     def on_epoch_end(self):
         elapsed_time = time.perf_counter() - self.start
@@ -166,7 +165,8 @@ class FinetuneVQA(pl.LightningModule):
         answer1 = self.vqa_model(img, batch["q_embedding"])
 
         # (A', A) loss
-        vqa_loss = self.vqa_model.criterion(answer1, batch["target"])
+        if self.cfg.TRAIN.LOSS in ["vqa_only", "full", "full_coeff"]:
+            vqa_loss = self.vqa_model.criterion(answer1, batch["target"])
 
         # 2. (Q, A) -> I' through IG model
         noise = torch.randn(answer1.size(0), 100).type_as(answer1)
@@ -182,16 +182,30 @@ class FinetuneVQA(pl.LightningModule):
         with torch.no_grad():
             gen_img = self.ig_model(noise, qa_embedding)
             # (I, I') loss TODO Figure out what to do with this loss
-            image_consistency_loss = self.image_consistency_loss(batch["img"], gen_img)
+            if self.cfg.TRAIN.LOSS in ["full", "full_coeff"]:
+                image_consistency_loss = self.image_consistency_loss(batch["img"], gen_img)
 
         # 3. (I', Q) -> A'' through VQA model
         answer2 = self.vqa_model(self.vqa_model.preprocess_img(gen_img), batch["q_embedding"])
         # (A'', A) loss
         answer_consistency_loss = self.vqa_model.criterion(answer2, batch["target"])
 
-        # total_loss = vqa_loss + self.cfg.TRAIN.LA * answer_consistency_loss + self.cfg.TRAIN.LC * image_consistency_loss
-        cycle_loss = answer_consistency_loss / image_consistency_loss
-        total_loss = vqa_loss + cycle_loss
+        if self.cfg.TRAIN.LOSS == "vqa_only":
+            total_loss = vqa_loss + self.cfg.TRAIN.LA * answer_consistency_loss
+            self.log("Loss/VQA", vqa_loss)
+        elif self.cfg.TRAIN.LOSS == "cns_only":
+            total_loss = answer_consistency_loss
+        elif self.cfg.TRAIN.LOSS == "full":
+            total_loss = vqa_loss + self.cfg.TRAIN.LA * answer_consistency_loss + self.cfg.TRAIN.LC * image_consistency_loss
+            self.log("Loss/VQA", vqa_loss)
+            self.log("Loss/Image_Consistency", image_consistency_loss)
+        elif self.cfg.TRAIN.LOSS == "full_coeff":
+            total_loss = vqa_loss + answer_consistency_loss / image_consistency_loss
+            self.log("Loss/VQA", vqa_loss)
+            self.log("Loss/Image_Consistency", image_consistency_loss)
+        else:
+            total_loss = answer_consistency_loss
+
         total_loss.backward()
         self.vqa_opt.step()
 
@@ -200,11 +214,9 @@ class FinetuneVQA(pl.LightningModule):
 
         self.log("Acc/Train_VQA", self.metrics["Acc/Train_VQA"])
         self.log("Acc/Train_Consistency", self.metrics["Acc/Train_Consistency"])
-
         self.log("Loss/Total", total_loss)
-        self.log("Loss/VQA", vqa_loss)
         self.log("Loss/Answer_Consistency", answer_consistency_loss)
-        self.log("Loss/Image_Consistency", image_consistency_loss)
+
         return
 
     def validation_step(self, batch, batch_idx):

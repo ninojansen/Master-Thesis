@@ -26,7 +26,6 @@ class VAE_DFGAN(pl.LightningModule):
             cfg = edict(cfg)
         self.cfg = cfg
         self.save_hyperparameters(self.cfg)
-
         self.encoder = NetD(cfg.MODEL.NG, cfg.IM_SIZE,
                             cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=False)
         self.encoder.apply(weights_init)

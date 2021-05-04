@@ -3,7 +3,7 @@ CONFIG_NAME: "easy_vqa"
 DATASET_NAME: "easy_vqa"
 DATA_DIR: "/home/nino/Documents/Datasets/ExtEasyVQA/"
 N_WORKERS: 12
-IM_SIZE: 64
+IM_SIZE: 128
 
 MODEL:
   ND: 8
@@ -14,7 +14,7 @@ MODEL:
 
 TRAIN:
   BATCH_SIZE: 24 #default 24
-  MAX_EPOCH: 250
+  MAX_EPOCH: 600
   G_LR: 0.0001
   D_LR: 0.0004
   VAE_LR: 0.0002
