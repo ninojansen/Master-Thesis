@@ -34,6 +34,7 @@ def parse_args():
     parser.add_argument('--ef_type', dest='ef_type', type=str, default=None)
     parser.add_argument('--n_hidden', dest='n_hidden', type=int, default=None)
     parser.add_argument('--cnn_type', dest='cnn_type', type=str, default=None)
+    parser.add_argument('--version', dest='version', type=str, default=None)
     parser.add_argument('--type', dest='type', type=str, default=None)
     parser.add_argument('--attention', dest='attention', action="store_true", default=False)
     parser.add_argument('--lr', dest='lr', type=float, default=None)
@@ -104,7 +105,10 @@ if __name__ == "__main__":
     cfg.MODEL.N_ANSWERS = len(datamodule.get_answer_map())
 
     #version = datetime.now().strftime("%d-%m_%H:%M:%S")
-    version = f"ef={cfg.MODEL.EF_TYPE}_nhidden={cfg.MODEL.N_HIDDEN}_lr={cfg.TRAIN.LR}"
+    if args.version:
+        version = args.version
+    else:
+        version = f"ef={cfg.MODEL.EF_TYPE}_nhidden={cfg.MODEL.N_HIDDEN}_lr={cfg.TRAIN.LR}"
 
     logger = TensorBoardLogger(args.output_dir, name=cfg.CONFIG_NAME, log_graph=True,
                                version=version)
