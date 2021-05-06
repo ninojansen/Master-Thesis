@@ -26,10 +26,11 @@ class VAE_DFGAN(pl.LightningModule):
             cfg = edict(cfg)
         self.cfg = cfg
         self.save_hyperparameters(self.cfg)
-        self.encoder = NetD(cfg.MODEL.NG, cfg.IM_SIZE,
+        self.encoder = NetD(cfg.MODEL.ND, cfg.IM_SIZE,
                             cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=False)
         self.encoder.apply(weights_init)
-        self.decoder = NetG(cfg.MODEL.ND, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
+        self.decoder = NetG(cfg.MODEL.NG, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
+
         self.decoder.apply(weights_init)
         self.kl_loss = lambda mu, logvar: -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
@@ -302,7 +303,7 @@ class DFGAN(pl.LightningModule):
                 vqa_pred = self.vqa_model(self.vqa_model.preprocess_img(fake_img), batch["q_embedding"])
                 self.val_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
                 self.log('VQA/Val', self.val_vqa_acc, on_step=False, on_epoch=True, prog_bar=True)
-        if not self.trainer.running_sanity_check and batch_idx == 0:
+        if not self.trainer.running_sanity_check and self.current_epoch % 5 == 0 and batch_idx == 0:
             val_images = []
             for img, text in zip(fake_img, batch["text"]):
                 val_images.append(generate_figure(img, text))
