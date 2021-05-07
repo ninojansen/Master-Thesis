@@ -27,17 +27,18 @@ import torchvision
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a DAMSM network')
-    parser.add_argument('--ckpt', dest='ckpt', type=str,
-                        default="/home/nino/Documents/Models/IG/ig_experiment_final")
-    parser.add_argument('--vqa_ckpt', dest='vqa_ckpt', type=str,
-                        default="/home/nino/Documents/Models/VQA/vqa_experiment_final/top_attention")
+    parser.add_argument(
+        '--ckpt', dest='ckpt', type=str,
+        default="/home/nino/Downloads/ig_experiment_final/sbert_reduced/non_pretrained_05-05_11:04:49/checkpoints/epoch=399-step=149999.ckpt")
     parser.add_argument('--data_dir', dest='data_dir', type=str, default="/home/nino/Documents/Datasets/ExtEasyVQA")
     parser.add_argument('--config_name', dest='name', type=str, default="ig_results")
     parser.add_argument('--outdir', dest='output_dir', type=str,
-                        default='/home/nino/Dropbox/Documents/Master/Thesis/Results/IG')
+                        default='/home/nino/Dropbox/Documents/Master/Thesis/Results')
+
     parser = pl.Trainer.add_argparse_args(parser)
     parser.set_defaults(gpus=-1)
     args = parser.parse_args()
+
     return args
 
 
@@ -67,7 +68,7 @@ if __name__ == "__main__":
                 model_ckpts.append((os.path.join(path, ckpt), ef_type, name))
 
     df = pd.DataFrame(columns=["FID", "Inception mean", "Inception std", "VQA", "Path"],
-                      index=[f"{x[1]}+{x[2]}" for x in model_ckpts])
+                      index=[f"{x[1]} {x[2]}" for x in model_ckpts])
 
     test_questions = []
     for batch in datamodule.test_dataloader():
@@ -78,28 +79,7 @@ if __name__ == "__main__":
             test_questions.append((q, a, type, specificity, text))
     # TODO make sampling based on type and spec to balance
     n_questions = 10
-
-    # sample_questions = random.sample([x for x in test_questions if x[2] == "count"],
-    #                                  2) + random.sample([x for x in test_questions if x[2] == "size"],
-    #                                                     2) + random.sample([x for x in test_questions if x[2] == "shape"],
-    #                                                                        2) + random.sample([x for x in test_questions if x[2] == "color"],
-    #                                                                                           2) + random.sample([x for x in test_questions if x[2] == "location"],
-
-    count_questions = [('How many shapes are in the image?', 'two', 'count', 0),
-                       ("How many black objects are in the image?", 'one', 'count', 1)]
-    color_questions = [('Which color is the small cicrcle?', 'brown', 'color', 2),
-                       ("Is there a orange circle present?", 'yes', 'color', 2)]
-    shape_questions = [("Does the image contain a medium sized indigo circle?", 'yes', 'shape', 3),
-                       ("Does the image contain a circle?", 'yes', 'shape', 1)]
-
-    size = [("How large is the orange circle?", 'small', 'size', 3),
-            ("Does the image contain a large rectangle?", 'yes', 'shape', 1)]
-
-    location_questions = [("Is there a red triangle above the circle?", 'yes', 'location', 3),
-                          ("In which part is the violet triangle placed?", 'bottom', 'location', 2)]
-
-    sample_questions = count_questions + color_questions + shape_questions + size + location_questions
-  #  sample_questions = random.sample(test_questions, n_questions)
+    sample_questions = random.sample(test_questions, n_questions)
 
     answer_map = datamodule.get_answer_map()
     sample_images = []
@@ -121,26 +101,22 @@ if __name__ == "__main__":
         noise = torch.randn(len(sample_questions), model.cfg.MODEL.Z_DIM).cuda()
         fake_pred = model(noise, qa_embedding)
         sample_images.append(fake_pred)
-       # sample_images[f"{ef_type}+{name}"] = fake_pred
-        trainer = pl.Trainer.from_argparse_args(
-            args, default_root_dir=args.output_dir)
-        vqa_results = trainer.test(model, test_dataloaders=datamodule.test_dataloader())
-        print(model.results, vqa_results)
-        row_id = f"{ef_type}+{name}"
-        df["FID"][row_id] = model.results["FID"]
-        df["Inception mean"][row_id] = model.results["IS_MEAN"]
-        df["Inception std"][row_id] = model.results["IS_STD"]
-        df["VQA"][row_id] = vqa_results[0]["VQA_Acc"]
-        df["Path"][row_id] = ckpt
+        #sample_images[f"{ef_type}+{name}"] = fake_pred
+        # trainer = pl.Trainer.from_argparse_args(
+        #     args, default_root_dir=args.output_dir)
+        # vqa_results = trainer.test(model, test_dataloaders=datamodule.test_dataloader())
+        # print(model.results, vqa_results)
+        # df["FID"] = model.results["FID"]
+        # df["Inception mean"] = model.results["IS_MEAN"]
+        # df["Inception std"] = model.results["IS_STD"]
+        # df["VQA"] = vqa_results[0]["VQA_Acc"]
+        # df["Path"][i] = ckpt
 
-    os.makedirs(args.output_dir, exist_ok=True)
     grid = torchvision.utils.save_image(
         torch.vstack(sample_images),
         f"{args.output_dir}/{args.name}_image.png", normalize=True, nrow=n_questions, padding=16, pad_value=255)
 
-    with open(f"{args.output_dir}/{args.name}_image.txt", 'w') as writer:
-        writer.write(" || ".join([f"{x[0]} {x[1]} type={x[2]} spec={x[3]}" for x in sample_questions]) + "\n")
-        for ckpt, ef_type, name in model_ckpts:
-            writer.write(f"{ef_type} {name}\n")
+    # TODO Add headers and rows manually
 
-    df.to_csv(f"{args.output_dir}/{args.name}.csv")
+    # os.makedirs(args.output_dir, exist_ok=True)
+    # df.to_csv(f"{args.output_dir}/{args.name}.csv")

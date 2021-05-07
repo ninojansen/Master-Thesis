@@ -1,0 +1,6 @@
+,FID,Inception mean,Inception std,VQA,Path
+phoc_reduced+non_pretrained_05-05_13:00:37,204.3918975910759,1.1186609,0.04720964,0.5,/home/nino/Documents/Models/IG/ig_experiment_final/phoc_reduced/non_pretrained_05-05_13:00:37/checkpoints/epoch=399-step=149999.ckpt
+sbert_reduced+non_pretrained_05-05_11:04:49,192.85599212916503,1.1163464,0.04670755,0.4583333432674408,/home/nino/Documents/Models/IG/ig_experiment_final/sbert_reduced/non_pretrained_05-05_11:04:49/checkpoints/epoch=399-step=149999.ckpt
+phoc_full+non_pretrained_05-05_11:19:44,,,,,
+bow+non_pretrained_05-05_13:02:09,,,,,
+sbert_full+non_pretrained_05-05_11:17:48,,,,,

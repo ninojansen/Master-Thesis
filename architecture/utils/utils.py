@@ -70,7 +70,6 @@ def gen_image_grid(images_tensor, labels):
     plt.clf()
     figure = plt.figure(figsize=(10, 10))
     plt.rcParams.update({'font.size': 6})
-    plt.tight_layout()
 
     for i in range(16):
         # Start next subplot.

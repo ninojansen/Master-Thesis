@@ -141,10 +141,11 @@ class DFGAN(pl.LightningModule):
             self.vqa_model.eval()
             self.train_vqa_acc = pl.metrics.Accuracy()
             self.val_vqa_acc = pl.metrics.Accuracy()
-            self.test_vqa_acc = pl.metrics.Accuracy()
+        self.test_vqa_acc = pl.metrics.Accuracy()
 
         self.fid = FrechetInceptionDistance()
         self.track_norm = True
+        self.eval_y = None
 
     def on_pretrain_routine_start(self):
         self.logger.experiment.add_graph(
@@ -192,11 +193,11 @@ class DFGAN(pl.LightningModule):
         fake_img = self.generator(noise, text_embed)
         # Prediction on the generated images
         fake_pred = self.discriminator(fake_img.detach() + torch.randn_like(fake_img) * noise_decay, text_embed)
-        #fake_pred = self.discriminator(fake_img.detach(), text_embed)
+        # fake_pred = self.discriminator(fake_img.detach(), text_embed)
         d_acc_fake = self.fake_acc(torch.sigmoid(fake_pred),
                                    torch.zeros(batch_size, dtype=torch.int32).cuda())
         d_loss_fake = torch.nn.ReLU()(1.0 + fake_pred).mean()
-        #d_loss_fake = F.binary_cross_entropy_with_logits(fake_pred, fake)
+        # d_loss_fake = F.binary_cross_entropy_with_logits(fake_pred, fake)
 
         d_loss = d_loss_real + (d_loss_fake + d_loss_wrong) / 2.0
         self.opt_d.zero_grad()
@@ -319,22 +320,27 @@ class DFGAN(pl.LightningModule):
         self.log("Inception/Val_Std", is_std)
 
     def test_step(self, batch, batch_idx):
-        text_embed = batch["qa_embedding"]
-    #     batch_size = self.cfg.TRAIN.BATCH_SIZE
-    #     # Generate images
-    #     noise = torch.randn(batch_size, self.cfg.MODEL.Z_DIM).type_as(text_embed)
+        q_embedding = self.text_embedding_generator.process_batch(batch["question"]).cuda(
+        )
+        a_embedding = self.text_embedding_generator.process_batch(batch["answer"]).cuda()
+        qa_embedding = torch.cat((q_embedding, a_embedding), dim=1)
 
-    #     fake_img = self.forward(noise, text_embed)
+        batch_size = self.batch_size
+        # Generate images
+        noise = torch.randn(batch_size, self.cfg.MODEL.Z_DIM).type_as(qa_embedding)
 
+        fake_img = self.forward(noise, qa_embedding)
+
+        self.inception.compute_statistics(fake_img)
+        self.fid.compute_statistics(batch["img"], fake_img)
+        if self.vqa_model:
+            with torch.no_grad():
+                vqa_pred = self.vqa_model(self.vqa_model.preprocess_img(fake_img), q_embedding)
+                self.test_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
+                self.log('VQA_Acc', self.test_vqa_acc)
     #    # incep_mean, incep_std = self.inception.compute_score(fake_img, num_splits=1)
 
     #    # self.log("Inception/Test", incep_mean, on_step=False, on_epoch=True)
-
-    #     if self.vqa_model:
-    #         with torch.no_grad():
-    #             vqa_pred = self.vqa_model(self.vqa_model.preprocess_img(fake_img), batch["q_embedding"])
-    #             self.test_vqa_acc(F.softmax(vqa_pred, dim=1), batch["target"])
-    #             self.log('VQA/Test', self.test_vqa_acc, on_epoch=True, on_step=False)
 
     #     val_images = []
     #     for img, text in zip(fake_img, batch["text"]):
@@ -346,6 +352,16 @@ class DFGAN(pl.LightningModule):
     #     #     self.logger.experiment.add_image(f"Val epoch {self.current_epoch}",
     #     #                                      grid, global_step=self.current_epoch)
 
+    def on_test_end(self):
+
+        fid_score = self.fid.compute_fid()
+        is_mean, is_std = self.inception.compute_score()
+        self.results = {"FID": fid_score, "IS_MEAN": is_mean, "IS_STD": is_std}
+    #     return fid_score, is_mean, is_std
+    #     self.log("FID/Val", fid_score)
+    #     self.log("Inception/Val_Mean", is_mean)
+    #     self.log("Inception/Val_Std", is_std)
+
     def on_epoch_end(self):
         elapsed_time = time.perf_counter() - self.start
         self.start = time.perf_counter()
@@ -354,7 +370,7 @@ class DFGAN(pl.LightningModule):
 
         batch_size = self.cfg.TRAIN.BATCH_SIZE
 
-        if not self.trainer.running_sanity_check:
+        if not self.trainer.running_sanity_check and self.eval_y:
             noise = torch.randn(batch_size, self.cfg.MODEL.Z_DIM).type_as(self.eval_y)
             fake_img = self.forward(noise, self.eval_y)
             val_images = []

@@ -47,7 +47,7 @@ class InceptionScore:
 
     def compute_statistics(self, batch):
         real_features = self.inception_model
-        batch = nn.Upsample(size=(299, 299), mode='bilinear')(batch)
+        batch = nn.Upsample(size=(299, 299), mode='bilinear', align_corners=False)(batch)
         pred = self.inception_model(batch)
         pred = F.softmax(pred, dim=0).data.cpu().numpy()
 
@@ -55,35 +55,3 @@ class InceptionScore:
             self.act = np.vstack([self.act, pred])
         else:
             self.act = pred
-
-
-class Inception_V3(nn.Module):
-    def __init__(self):
-        super(INCEPTION_V3, self).__init__()
-        self.model = models.inception_v3(pretrained=True, progress=True)
-        url = 'https://download.pytorch.org/models/inception_v3_google-1a9a5a14.pth'
-        # print(next(model.parameters()).data)
-        state_dict = \
-            model_zoo.load_url(url, map_location=lambda storage, loc: storage)
-        self.model.load_state_dict(state_dict)
-        for param in self.model.parameters():
-            param.requires_grad = False
-     #   print('Load pretrained model from ', url)
-        # print(next(self.model.parameters()).data)
-        # print(self.model)
-
-    def forward(self, input):
-        # [-1.0, 1.0] --> [0, 1.0]
-        x = input * 0.5 + 0.5
-        # mean=[0.485, 0.456, 0.406] and std=[0.229, 0.224, 0.225]
-        # --> mean = 0, std = 1
-        x[:, 0, :] = (x[:, 0, :] - 0.485) / 0.229
-        x[:, 1, :] = (x[:, 1, :] - 0.456) / 0.224
-        x[:, 2, :] = (x[:, 2, :] - 0.406) / 0.225
-        #
-        # --> fixed-size input: batch x 3 x 299 x 299
-        x = nn.Upsample(size=(299, 299), mode='bilinear', align_corners=True)(x)
-        # 299 x 299 x 3
-        x = self.model(x)
-        x = nn.Softmax(dim=0)(x)
-        return x
