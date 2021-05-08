@@ -3,7 +3,7 @@ CONFIG_NAME: "easy_vqa"
 DATASET_NAME: "easy_vqa"
 DATA_DIR: "/home/nino/Documents/Datasets/ExtEasyVQA/"
 N_WORKERS: 12
-IM_SIZE: 64
+IM_SIZE: 128
 
 MODEL:
   VQA_CHECKPOINT: "/home/nino/Documents/Models/VQA/vqa_experiment_final/top_attention/ef=sbert_reduced_nhidden=256_lr=0.002/checkpoints/epoch=8-step=33749.ckpt"
@@ -11,8 +11,8 @@ MODEL:
 
 TRAIN:
   BATCH_SIZE: 24 #default 24
-  MAX_EPOCH: 10
-  LR: 0.0001
+  MAX_EPOCH: 30
+  LR: 0.0002
   LOSS: "full"
   CHECKPOINT: ""
 

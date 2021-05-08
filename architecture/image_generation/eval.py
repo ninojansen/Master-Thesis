@@ -44,9 +44,9 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
 
-    batch_size = 24
-    datamodule = EasyVQADataModule(
-        data_dir=args.data_dir, batch_size=batch_size, num_workers=12, im_size=128, pretrained_text=True)
+    batch_size = 8
+    datamodule = EasyVQADataModule(data_dir=args.data_dir, batch_size=batch_size,
+                                   num_workers=12, im_size=128, pretrained_text=True, iterator="image")
     datamodule.setup("test")
 
     vqa_ckpts = {}
