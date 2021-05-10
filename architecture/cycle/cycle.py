@@ -17,13 +17,14 @@ from architecture.visual_question_answering.trainer import VQA
 from architecture.image_generation.trainer import DFGAN
 from datetime import datetime
 from architecture.cycle.trainer import FinetuneVQA, FinetuneIG
+import pandas as pd
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a DAMSM network')
     parser.add_argument('--cfg', dest='cfg_file',
                         help='optional config file',
-                        default='cfg/finetune_ig.yml', type=str)
+                        default='cfg/finetune_vqa.yml', type=str)
     parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
     parser.add_argument('--data_dir', dest='data_dir', type=str, default=None)
@@ -92,7 +93,21 @@ if __name__ == "__main__":
 
     # print(f"==============Training {cfg.CONFIG_NAME} model==============")
     trainer.fit(cycle_model, datamodule)
-    # result = trainer.test(model)
 
-    # print("Result:")
-    # print(result)
+    result = trainer.test(cycle_model)
+    if args.type == "vqa":
+        df = pd.DataFrame(columns=["Full", "Yes/No", "Open", "Size", "Shape", "Color", "Location",
+                                   "Count", "Spec1", "Spec2", "Spec3", "Path"], index=[f"finetune_vqa_{cfg.TRAIN.LOSS}"])
+        i = 0
+        df["Full"][i] = result[0]["Test/Acc/General"]
+        df["Yes/No"][i] = result[0]["Test/Acc/Bool"]
+        df["Open"][i] = result[0]["Test/Acc/Open"]
+        df["Size"][i] = result[0]["Test/Acc/Size"]
+        df["Shape"][i] = result[0]["Test/Acc/Shape"]
+        df["Color"][i] = result[0]["Test/Acc/Color"]
+        df["Location"][i] = result[0]["Test/Acc/Location"]
+        df["Count"][i] = result[0]["Test/Acc/Count"]
+        df["Spec1"][i] = result[0]["Test/Acc/Spec1"]
+        df["Spec2"][i] = result[0]["Test/Acc/Spec2"]
+        df["Spec3"][i] = result[0]["Test/Acc/Spec3"]
+        df.to_csv(f"{args.output_dir}/finetune_vqa_{cfg.TRAIN.LOSS}_{version}.csv")
