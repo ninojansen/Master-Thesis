@@ -1,5 +1,7 @@
 #!/bin/bash
 
+name=cycle_experiments
+export name
 
 vqa_ckpt=/data/s2965690/vqa_experiment_final/top_attention/ef=phoc_reduced_nhidden=256_lr=0.002/checkpoints/epoch=10-step=41249.ckpt
 ig_ckpt=/data/s2965690/ig_experiment_final/phoc_reduced/non_pretrained_05-05_13:00:37/checkpoints/epoch=399-step=149999.ckpt

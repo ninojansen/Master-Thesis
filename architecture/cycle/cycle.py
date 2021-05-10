@@ -87,7 +87,8 @@ if __name__ == "__main__":
     else:
         cycle_model = FinetuneVQA(cfg, vqa_model, ig_model, answer_map)
     version = datetime.now().strftime("%d-%m_%H:%M:%S")
-    logger = TensorBoardLogger(args.output_dir, name=f"finetune_{args.type}", version=f"cycle_{version}")
+    logger = TensorBoardLogger(
+        args.output_dir, name=f"finetune_{args.type}", version=f"cycle_{cfg.TRAIN.LOSS}_{version}")
     trainer = pl.Trainer.from_argparse_args(
         args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=logger, default_root_dir=args.output_dir)
 

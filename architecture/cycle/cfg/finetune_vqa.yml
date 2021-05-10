@@ -12,8 +12,8 @@ MODEL:
 TRAIN:
   BATCH_SIZE: 24 #default 24
   MAX_EPOCH: 30
-  LR: 0.0002
-  LC: 1.0
+  LR: 0.0005
+  LC: 0.5
   LA: 1.0
   LOSS: "full"
   CHECKPOINT: ""
