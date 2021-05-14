@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
     parser.add_argument('--data_dir', dest='data_dir', type=str, default=None)
     parser.add_argument("--vqa_ckpt", dest='vqa_ckpt', type=str, default=None)
+    parser.add_argument("--gating", dest='gating', action='store_true')
     parser.add_argument("--ig_ckpt", dest='ig_ckpt', type=str, default=None)
     parser.add_argument("--type", dest='type', type=str, default="vqa")
     parser.add_argument("--loss", dest='loss', type=str, default="full")
@@ -57,6 +58,8 @@ if __name__ == "__main__":
         cfg.MODEL.IG_CHECKPOINT = args.ig_ckpt
     if args.loss:
         cfg.TRAIN.LOSS = args.loss
+
+    cfg.TRAIN.GATING = args.gating
 
     vqa_model = VQA.load_from_checkpoint(cfg.MODEL.VQA_CHECKPOINT)
     ig_model = DFGAN.load_from_checkpoint(cfg.MODEL.IG_CHECKPOINT)
@@ -88,7 +91,7 @@ if __name__ == "__main__":
         cycle_model = FinetuneVQA(cfg, vqa_model, ig_model, answer_map)
     version = datetime.now().strftime("%d-%m_%H:%M:%S")
     logger = TensorBoardLogger(
-        args.output_dir, name=f"finetune_{args.type}", version=f"cycle_{cfg.TRAIN.LOSS}_{version}")
+        args.output_dir, name=f"finetune_{args.type}", version=f"cycle_{cfg.TRAIN.LOSS}_{cfg.TRAIN.GATING}_{version}")
     trainer = pl.Trainer.from_argparse_args(
         args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=logger, default_root_dir=args.output_dir)
 

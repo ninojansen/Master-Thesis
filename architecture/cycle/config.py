@@ -19,6 +19,7 @@ __C.TRAIN.LR = 0.0002
 __C.TRAIN.LC = 0.5
 __C.TRAIN.LA = 0.5
 __C.TRAIN.LOSS = "full"
+__C.TRAIN.GATING = False
 __C.TRAIN.CHECKPOINT = ''
 
 __C.MODEL = edict()

@@ -15,8 +15,8 @@ from architecture.utils.inception_score import InceptionScore
 from architecture.visual_question_answering.models import SimpleVQA
 from architecture.embeddings.image.generator import ImageEmbeddingGenerator
 from architecture.utils.utils import gen_image_grid, weights_init, generate_figure
-
 from architecture.embeddings.text.generator import TextEmbeddingGenerator
+import matplotlib.pyplot as plt
 
 
 class FinetuneIG(pl.LightningModule):
@@ -140,13 +140,14 @@ class FinetuneIG(pl.LightningModule):
 
 class FinetuneVQA(pl.LightningModule):
 
-    def __init__(self, cfg, vqa_model, ig_model, answer_map):
+    def __init__(self, cfg, vqa_model=None, ig_model=None, answer_map=None):
         super().__init__()
         self.automatic_optimization = False
         self.cfg = cfg
         self.vqa_model = vqa_model
         self.ig_model = ig_model
         self.answer_map = answer_map
+        self.save_hyperparameters(self.cfg)
         self.start = time.perf_counter()
 
         self.embedding_generator = ImageEmbeddingGenerator(cfg.DATA_DIR, "vgg16_flat")
@@ -162,6 +163,11 @@ class FinetuneVQA(pl.LightningModule):
     def forward(self, x, y):
         # in lightning, forward defines the prediction/inference actions
         return self.vqa_model(x, y)
+
+    def display_images(self, images):
+        grid = torchvision.utils.make_grid(images, normalize=True)
+        plt.imshow(grid.permute(1, 2, 0))
+        plt.show()
 
     def image_consistency_loss(self, real, generated):
         real_features = self.embedding_generator.process_batch(real, transform=True)
@@ -198,6 +204,9 @@ class FinetuneVQA(pl.LightningModule):
             if self.cfg.TRAIN.LOSS in ["full", "full_coeff"]:
                 image_consistency_loss = self.image_consistency_loss(batch["img"], gen_img)
 
+                if self.cfg.TRAIN.GATING:
+                    if image_consistency_loss >= 0.20:
+                        return
         # 3. (I', Q) -> A'' through VQA model
         answer2 = self.vqa_model(self.vqa_model.preprocess_img(gen_img), batch["q_embedding"])
         # (A'', A) loss
@@ -210,12 +219,12 @@ class FinetuneVQA(pl.LightningModule):
             total_loss = answer_consistency_loss
         elif self.cfg.TRAIN.LOSS == "full":
             total_loss = vqa_loss + self.cfg.TRAIN.LA * answer_consistency_loss + self.cfg.TRAIN.LC * image_consistency_loss
-            self.log("Loss/VQA", vqa_loss)
-            self.log("Loss/Image_Consistency", image_consistency_loss)
+            self.log("Loss/VQA", vqa_loss, on_epoch=True)
+            self.log("Loss/Image_Consistency", image_consistency_loss, on_epoch=True)
         elif self.cfg.TRAIN.LOSS == "full_coeff":
             total_loss = vqa_loss + answer_consistency_loss / image_consistency_loss
-            self.log("Loss/VQA", vqa_loss)
-            self.log("Loss/Image_Consistency", image_consistency_loss)
+            self.log("Loss/VQA", vqa_loss, on_epoch=True)
+            self.log("Loss/Image_Consistency", image_consistency_loss, on_epoch=True)
         else:
             total_loss = answer_consistency_loss
 
@@ -226,11 +235,10 @@ class FinetuneVQA(pl.LightningModule):
         self.metrics["Acc/Train_VQA"](F.softmax(answer1, dim=1), batch["target"])
         self.metrics["Acc/Train_Consistency"](F.softmax(answer1, dim=1), batch["target"])
 
-        self.log("Acc/Train_VQA", self.metrics["Acc/Train_VQA"])
-        self.log("Acc/Train_Consistency", self.metrics["Acc/Train_Consistency"])
-        self.log("Loss/Total", total_loss)
-        self.log("Loss/Answer_Consistency", answer_consistency_loss)
-
+        self.log("Acc/Train_VQA", self.metrics["Acc/Train_VQA"], on_epoch=True)
+        self.log("Acc/Train_Consistency", self.metrics["Acc/Train_Consistency"], on_epoch=True)
+        self.log("Loss/Total", total_loss, on_epoch=True)
+        self.log("Loss/Answer_Consistency", answer_consistency_loss, on_epoch=True)
         return
 
     def validation_step(self, batch, batch_idx):
