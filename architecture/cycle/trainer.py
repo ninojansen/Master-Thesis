@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 
 class FinetuneIG(pl.LightningModule):
 
-    def __init__(self, cfg, vqa_model, ig_model, answer_map):
+    def __init__(self, cfg, vqa_model=None, ig_model=None, answer_map=None):
         super().__init__()
         self.automatic_optimization = False
         self.cfg = cfg
@@ -29,12 +29,16 @@ class FinetuneIG(pl.LightningModule):
         self.ig_model = ig_model
         self.answer_map = answer_map
         self.start = time.perf_counter()
+        self.save_hyperparameters(self.cfg)
         self.opt = self.configure_optimizers()
 
         self.embedding_generator = ImageEmbeddingGenerator(cfg.DATA_DIR, "vgg16_flat")
 
         self.metrics = {"Acc/Train_VQA": pl.metrics.Accuracy().cuda(),
-                        "Acc/Val_VQA": pl.metrics.Accuracy().cuda()}
+                        "Acc/Val_VQA": pl.metrics.Accuracy().cuda(), "Acc/Test_VQA": pl.metrics.Accuracy().cuda()}
+        self.text_embedding_generator = TextEmbeddingGenerator(
+            ef_type=self.vqa_model.cfg.MODEL.EF_TYPE, data_dir=cfg.DATA_DIR)
+
         self.ig_opt = self.configure_optimizers()
 
     def forward(self, x, y):
@@ -75,6 +79,7 @@ class FinetuneIG(pl.LightningModule):
             total_loss = vqa_loss
 
         total_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.ig_model.parameters(), 0.25)
         self.ig_opt.step()
 
         self.metrics["Acc/Train_VQA"](F.softmax(answer, dim=1), batch["target"])
@@ -119,7 +124,29 @@ class FinetuneIG(pl.LightningModule):
         self.log("Inception/Val_Std", is_std)
 
     def test_step(self, batch, batch_idx):
-        pass
+        q_embedding = self.text_embedding_generator.process_batch(batch["question"]).cuda(
+        )
+        a_embedding = self.text_embedding_generator.process_batch(batch["answer"]).cuda()
+        qa_embedding = torch.cat((q_embedding, a_embedding), dim=1)
+
+        batch_size = self.cfg.TRAIN.BATCH_SIZE
+        # Generate images
+        noise = torch.randn(batch_size, self.ig_model.cfg.MODEL.Z_DIM).type_as(qa_embedding)
+
+        fake_img = self.forward(noise, qa_embedding)
+
+        self.ig_model.inception.compute_statistics(fake_img)
+        self.ig_model.fid.compute_statistics(batch["img"], fake_img)
+        if self.vqa_model:
+            with torch.no_grad():
+                vqa_pred = self.vqa_model(self.vqa_model.preprocess_img(fake_img), q_embedding)
+                self.metrics["Acc/Test_VQA"](F.softmax(vqa_pred, dim=1), batch["target"])
+                self.log('Test/VQA_Acc', self.metrics["Acc/Test_VQA"])
+
+    def on_test_end(self):
+        fid_score = self.ig_model.fid.compute_fid()
+        is_mean, is_std = self.ig_model.inception.compute_score()
+        self.results = {"FID": fid_score, "IS_MEAN": is_mean, "IS_STD": is_std}
 
     def on_epoch_end(self):
         elapsed_time = time.perf_counter() - self.start
