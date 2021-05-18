@@ -16,11 +16,12 @@ from easydict import EasyDict as edict
 from architecture.utils.utils import weights_init
 from torchvision import datasets, models, transforms
 from architecture.embeddings.image.generator import ImageEmbeddingGenerator
+from architecture.embeddings.text.generator import TextEmbeddingGenerator
 
 
 class VQA(pl.LightningModule):
 
-    def __init__(self, cfg, text_embedding_generator=None):
+    def __init__(self, cfg):
         super().__init__()
         if type(cfg) is dict:
             cfg = edict(cfg)
@@ -28,7 +29,7 @@ class VQA(pl.LightningModule):
         self.lr = cfg.TRAIN.LR
         self.save_hyperparameters(self.cfg)
 
-        self.text_embedding_generator = text_embedding_generator
+        self.text_embedding_generator = TextEmbeddingGenerator(ef_type=cfg.MODEL.EF_TYPE, data_dir=cfg.DATA_DIR)
         if cfg.MODEL.CNN_TYPE != "cnn":
             self.embedding_generator = ImageEmbeddingGenerator(cfg.DATA_DIR, cfg.MODEL.CNN_TYPE)
 

@@ -155,21 +155,28 @@ class TextEmbeddingGenerator():
 
     def _make_phoc_vector(self, word):
         word = word.lower()
-        hist_l1 = np.zeros(26)
+        # hist_l1 = np.zeros(26)
+
         hist_l2_1 = np.zeros(26)
         hist_l2_2 = np.zeros(26)
+
         hist_l3_1 = np.zeros(26)
         hist_l3_2 = np.zeros(26)
         hist_l3_3 = np.zeros(26)
-        hist_l3_4 = np.zeros(26)
+
+        hist_l4_1 = np.zeros(26)
+        hist_l4_2 = np.zeros(26)
+        hist_l4_3 = np.zeros(26)
+        hist_l4_4 = np.zeros(26)
 
         size = len(word)
         half_split = size // 2
+        third_split = size // 3
         quart_split = size // 4
         # L1: full word
-        for c in word:
-            # 97 == ord("a")
-            hist_l1[ord(c) - 97] += 1
+        # for c in word:
+        #     # 97 == ord("a")
+        #     hist_l1[ord(c) - 97] += 1
 
         # L2: half word
         for c in word[:size // 2]:
@@ -177,22 +184,32 @@ class TextEmbeddingGenerator():
         for c in word[size // 2:]:
             hist_l2_2[ord(c) - 97] += 1
 
-        # L3 quarter split
-        for c in word[:quart_split]:
+        # L3: triple split
+        for c in word[:third_split]:
             hist_l3_1[ord(c) - 97] += 1
-        for c in word[quart_split:half_split]:
+        for c in word[third_split:third_split * 2]:
             hist_l3_2[ord(c) - 97] += 1
+        for c in word[third_split * 2:]:
+            hist_l3_2[ord(c) - 97] += 1
+        # L4 quarter split
+        for c in word[:quart_split]:
+            hist_l4_1[ord(c) - 97] += 1
+        for c in word[quart_split:half_split]:
+            hist_l4_2[ord(c) - 97] += 1
         for c in word[half_split:quart_split + half_split]:
-            hist_l3_3[ord(c) - 97] += 1
+            hist_l4_3[ord(c) - 97] += 1
         for c in word[quart_split + half_split:]:
-            hist_l3_4[ord(c) - 97] += 1
+            hist_l4_4[ord(c) - 97] += 1
 
         # Concatenate all vectors and normalize
         # embedding = np.concatenate((hist_l1, hist_l2_1, hist_l2_2, hist_l3_1,
         #                             hist_l3_2, hist_l3_3, hist_l3_4)) / (size * 3)
         # DONT NORMALIZE
-        embedding = np.concatenate((hist_l1, hist_l2_1, hist_l2_2, hist_l3_1,
-                                    hist_l3_2, hist_l3_3, hist_l3_4))
+        embedding = np.concatenate((hist_l2_1, hist_l2_2,
+                                    hist_l3_1, hist_l3_2, hist_l3_3,
+                                    hist_l4_1, hist_l4_2, hist_l4_3, hist_l4_4))
+        # embedding = np.concatenate((hist_l1, hist_l2_1, hist_l2_2, hist_l4_1,
+        #                             hist_l4_2, hist_l4_3, hist_l4_4))
         return embedding
 
     def _make_bow_vector(self, sentence, word_to_ix):
@@ -213,3 +230,8 @@ class TextEmbeddingGenerator():
         model.fit(train_objectives=[(train_dataloader, train_loss)], epochs=epochs,
                   warmup_steps=100, output_path=output_path)
         return model
+
+
+if __name__ == "__main__":
+    gen = TextEmbeddingGenerator()
+    gen._make_phoc_vector("beyond")

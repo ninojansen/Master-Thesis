@@ -17,6 +17,7 @@ from pl_bolts.datamodules import CIFAR10DataModule
 from architecture.visual_question_answering.trainer import VQA
 from datetime import datetime
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+import pandas as pd
 
 
 def parse_args():
@@ -30,7 +31,7 @@ def parse_args():
     parser.add_argument('--test', dest='test', action="store_true", default=False)
     # Model parameters
     # EF_TYPE, ATTENTION, CNN_TYPE, N_HIDDEN, LR
-    parser.add_argument('--config_name', dest='config_name', type=str, default=None)
+    parser.add_argument('--config_name', dest='config_name', type=str, default="vqa")
     parser.add_argument('--ef_type', dest='ef_type', type=str, default=None)
     parser.add_argument('--n_hidden', dest='n_hidden', type=int, default=None)
     parser.add_argument('--cnn_type', dest='cnn_type', type=str, default=None)
@@ -45,6 +46,15 @@ def parse_args():
 
     args = parser.parse_args()
     return args
+
+
+def load_results_file(path):
+    if os.path.isfile(path):
+        df = pd.read_csv(path)
+    else:
+        df = pd.DataFrame(columns=["Name", "CNN Type", "Text Embedding", "Full", "Yes/No", "Open",
+                                   "Size", "Shape", "Color", "Location", "Count", "Spec1", "Spec2", "Spec3"])
+    return df
 
 
 if __name__ == "__main__":
@@ -130,7 +140,30 @@ if __name__ == "__main__":
   #  trainer.tune(model, datamodule)
     trainer.fit(model, datamodule)
 
-    # print(f"==============Validating final {cfg.CONFIG_NAME} model==============")
-    # result = trainer.test(model, test_dataloaders=datamodule.test_dataloader())
-    # print("Result:")
-    # print(result)
+    #print(f"==============Validating final {cfg.CONFIG_NAME} model==============")
+    os.makedirs(args.output_dir, exist_ok=True)
+    results_path = os.path.join(args.output_dir, f"vqa_results.csv")
+
+    result = trainer.test(model, test_dataloaders=datamodule.test_dataloader())
+    print("Result:")
+    print(result)
+
+    # Add a new DF row and save it
+    df = load_results_file(results_path)
+    row = {
+        "Name": args.config_name,
+        "CNN Type": cfg.MODEL.CNN_TYPE,
+        "Text Embedding": cfg.MODEL.EF_TYPE,
+        "Full": result[0]["Test/Acc/General"],
+        "Yes/No": result[0]["Test/Acc/Bool"],
+        "Open": result[0]["Test/Acc/Open"],
+        "Size": result[0]["Test/Acc/Size"],
+        "Shape": result[0]["Test/Acc/Shape"],
+        "Color": result[0]["Test/Acc/Color"],
+        "Location": result[0]["Test/Acc/Location"],
+        "Count": result[0]["Test/Acc/Count"],
+        "Spec1": result[0]["Test/Acc/Spec1"],
+        "Spec2": result[0]["Test/Acc/Spec2"],
+        "Spec3": result[0]["Test/Acc/Spec3"]}
+    df.loc[datetime.now().strftime("%d-%m_%H:%M:%S")] = row
+    df.to_csv(results_path, index=False)

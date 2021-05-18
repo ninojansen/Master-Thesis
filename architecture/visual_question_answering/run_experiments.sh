@@ -1,6 +1,6 @@
 #!/bin/bash
 
-name=vqa_experiment_final
+name=vqa_experiment_final1
 export name
 
 sbatch cnn_gpu_train.sh
