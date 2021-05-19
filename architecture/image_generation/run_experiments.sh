@@ -1,8 +1,13 @@
 #!/bin/bash
-name=ig_experiment_final
-type=no_pretrain
+name=ig_experiment_question1
+# ig_experiment_image1
+type=all
+iterator=question
+max_epochs=200
 export type
 export name
+export iterator
+export max_epochs
 
 ef_types=(
     sbert_reduced
@@ -12,13 +17,13 @@ ef_types=(
     bow    
     )
 
-vqa_ckpts=(
-/home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/easy_vqa_sbert/ef=sbert_reduced_nhidden=256_lr=0.0002/checkpoints/epoch=3-step=16009.ckpt
-/home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/easy_vqa_sbert/ef=sbert_reduced_nhidden=256_lr=0.0002/checkpoints/epoch=3-step=16009.ckpt
-/home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/easy_vqa_sbert/ef=sbert_reduced_nhidden=256_lr=0.0002/checkpoints/epoch=3-step=16009.ckpt
-/home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/easy_vqa_sbert/ef=sbert_reduced_nhidden=256_lr=0.0002/checkpoints/epoch=3-step=16009.ckpt
-/home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/easy_vqa_sbert/ef=sbert_reduced_nhidden=256_lr=0.0002/checkpoints/epoch=3-step=16009.ckpt
-)    
+# vqa_ckpts=(
+# /home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/easy_vqa_sbert/ef=sbert_reduced_nhidden=256_lr=0.0002/checkpoints/epoch=3-step=16009.ckpt
+# /home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/easy_vqa_sbert/ef=sbert_reduced_nhidden=256_lr=0.0002/checkpoints/epoch=3-step=16009.ckpt
+# /home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/easy_vqa_sbert/ef=sbert_reduced_nhidden=256_lr=0.0002/checkpoints/epoch=3-step=16009.ckpt
+# /home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/easy_vqa_sbert/ef=sbert_reduced_nhidden=256_lr=0.0002/checkpoints/epoch=3-step=16009.ckpt
+# /home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/easy_vqa_sbert/ef=sbert_reduced_nhidden=256_lr=0.0002/checkpoints/epoch=3-step=16009.ckpt
+# )    
 
 for i in ${!ef_types[*]}; do
     ef_type="${ef_types[i]}"

@@ -19,6 +19,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 from datetime import datetime
 from architecture.visual_question_answering.trainer import VQA
+import pandas as pd
 
 
 def parse_args():

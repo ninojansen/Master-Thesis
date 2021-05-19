@@ -15,6 +15,7 @@ from architecture.image_generation.model import NetD, NetG
 from architecture.utils.utils import gen_image_grid, weights_init, generate_figure
 from easydict import EasyDict as edict
 from architecture.embeddings.image.generator import ImageEmbeddingGenerator
+from architecture.embeddings.text.generator import TextEmbeddingGenerator
 
 
 class VAE_DFGAN(pl.LightningModule):
@@ -132,8 +133,9 @@ class DFGAN(pl.LightningModule):
 
         self.discriminator.apply(weights_init)
         self.opt_g, self.opt_d = self.configure_optimizers()
-
+        self.text_embedding_generator = TextEmbeddingGenerator(ef_type=cfg.MODEL.EF_TYPE, data_dir=cfg.DATA_DIR)
         self.start = time.perf_counter()
+        self.batch_size = cfg.TRAIN.BATCH_SIZE
         self.inception = InceptionScore()
         self.real_acc = pl.metrics.Accuracy()
         self.fake_acc = pl.metrics.Accuracy()
