@@ -372,7 +372,7 @@ class DFGAN(pl.LightningModule):
 
         batch_size = self.cfg.TRAIN.BATCH_SIZE
 
-        if not self.trainer.running_sanity_check and self.eval_y:
+        if not self.trainer.running_sanity_check and self.eval_y != None:
             noise = torch.randn(batch_size, self.cfg.MODEL.Z_DIM).type_as(self.eval_y)
             fake_img = self.forward(noise, self.eval_y)
             val_images = []

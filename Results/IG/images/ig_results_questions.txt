@@ -1,0 +1,10 @@
+How many shapes are in the image? two type=count spec=0
+How many black objects are in the image? one type=count spec=1
+Which color is the small cicrcle? brown type=color spec=2
+Is there a orange circle present? yes type=color spec=2
+Does the image contain a medium sized indigo circle? yes type=shape spec=3
+Does the image contain a circle? yes type=shape spec=1
+How large is the orange circle? small type=size spec=3
+Does the image contain a large rectangle? yes type=shape spec=1
+Is there a red triangle above the circle? yes type=location spec=3
+In which part is the violet triangle placed? bottom type=location spec=2
