@@ -20,8 +20,6 @@ export ig_ckpt
 loss_arr=(
     vqa_only
     cns_only
-    full
-    full_coeff
 )
 
 for loss in "${loss_arr[@]}"; do
