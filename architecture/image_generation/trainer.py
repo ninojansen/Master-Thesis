@@ -133,7 +133,10 @@ class DFGAN(pl.LightningModule):
 
         self.discriminator.apply(weights_init)
         self.opt_g, self.opt_d = self.configure_optimizers()
-        self.text_embedding_generator = TextEmbeddingGenerator(ef_type=cfg.MODEL.EF_TYPE, data_dir=cfg.DATA_DIR)
+        try:
+            self.text_embedding_generator = TextEmbeddingGenerator(ef_type=cfg.MODEL.EF_TYPE, data_dir=cfg.DATA_DIR)
+        except:
+            pass
         self.start = time.perf_counter()
         self.batch_size = cfg.TRAIN.BATCH_SIZE
         self.inception = InceptionScore()

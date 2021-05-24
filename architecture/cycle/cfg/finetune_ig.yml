@@ -6,8 +6,8 @@ N_WORKERS: 12
 IM_SIZE: 128
 
 MODEL:
-  VQA_CHECKPOINT: "/home/nino/Documents/Models/VQA/vqa_experiment_final/top_attention/ef=sbert_reduced_nhidden=256_lr=0.002/checkpoints/epoch=8-step=33749.ckpt"
-  IG_CHECKPOINT: "/home/nino/Dropbox/Documents/Master/Thesis/architecture/image_generation/output/sbert_reduced/non_pretrained_04-05_11:52:43/checkpoints/epoch=4-step=1502.ckpt"
+  VQA_CHECKPOINT: "/home/nino/Dropbox/Documents/Master/Thesis/architecture/visual_question_answering/output/top_attention/ef=sbert_reduced_nhidden=256_lr=0.002/checkpoints/epoch=0-step=9-v1.ckpt"
+  IG_CHECKPOINT: "/home/nino/Dropbox/Documents/Master/Thesis/architecture/image_generation/output/sbert_reduced/non_pretrained_20-05_09:52:40/checkpoints/epoch=1-step=19.ckpt"
 
 TRAIN:
   BATCH_SIZE: 24 #default 24

@@ -22,3 +22,6 @@ out_dir=/home/nino/Dropbox/Documents/Master/Thesis/Results/IG
 vqa_ckpt=/home/nino/Documents/Models/VQA/vqa_experiment_final/top_attention
 
 python eval.py --ckpt $exp_dir --config_name $name --data_dir $data_dir --outdir $out_dir --vqa_ckpt $vqa_ckpt
+
+
+# python eval.py --ckpt /data/s2965690/ig_experiment_final3/--config_name ig_results --data_dir /data/s2965690/datasets/ExtEasyVQA/ --outdir /data/s2965690/results/ig_final

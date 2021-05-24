@@ -29,9 +29,9 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a DAMSM network')
     parser.add_argument(
         '--ckpt', dest='ckpt', type=str,
-        default="/home/nino/Documents/Models/IG/ig_experiment_final/phoc_reduced/non_pretrained_05-05_13:00:37/checkpoints/epoch=399-step=149999.ckpt")
+        default="/home/nino/Documents/Models/IG_FINAL/sbert_reduced3/pretrained_21-05_20:36:25/checkpoints/epoch=399-step=149999.ckpt")
     parser.add_argument('--data_dir', dest='data_dir', type=str, default="/home/nino/Documents/Datasets/ExtEasyVQA")
-    parser.add_argument('--config_name', dest='name', type=str, default="ig_results")
+    parser.add_argument('--name', dest='name', type=str, default="ig_results")
     parser.add_argument('--outdir', dest='output_dir', type=str,
                         default='/home/nino/Dropbox/Documents/Master/Thesis/Results')
 
@@ -89,33 +89,40 @@ if __name__ == "__main__":
     a_embedding = text_embedding_generator.process_batch([x[1] for x in sample_questions])
     qa_embedding = torch.cat((q_embedding, a_embedding), dim=1).cuda()
 
-    for _ in range(5):
+    n_images = 4
+    for _ in range(n_images):
         noise = torch.randn(len(sample_questions), model.cfg.MODEL.Z_DIM).cuda()
         with torch.no_grad():
             fake_pred = model(noise, qa_embedding)
         retried_images.append(fake_pred)
 
-    for _ in range(5):
+    for _ in range(n_images):
         noise = torch.randn(len(sample_questions), model.cfg.MODEL.Z_DIM).cuda()
         with torch.no_grad():
             fake_pred = model(noise, qa_embedding + torch.rand_like(qa_embedding).type_as(qa_embedding))
         noise_images.append(fake_pred)
 
-    retried_grid = torchvision.utils.make_grid(torch.vstack(retried_images).cpu(),
-                                               normalize=True,
-                                               nrow=len(sample_questions),
-                                               padding=16, pad_value=255)
+    retried_dir = os.path.join(args.output_dir, args.name, "retried")
+    os.makedirs(retried_dir, exist_ok=True)
 
-    noise_grid = torchvision.utils.make_grid(torch.vstack(noise_images).cpu(),
-                                             normalize=True,
-                                             nrow=len(sample_questions),
-                                             padding=16, pad_value=255)
+    noise_dir = os.path.join(args.output_dir, args.name, "noise")
+    os.makedirs(noise_dir, exist_ok=True)
+    for i, image in enumerate(retried_images):
+        torchvision.utils.save_image(
+            image, os.path.join(retried_dir, f"retried_{i}.png"),
+            normalize=True, nrow=10, padding=16, pad_value=255)
 
-    out = f"{args.output_dir}/{args.name}_retried_image.png"
+    for i, image in enumerate(noise_images):
+        torchvision.utils.save_image(
+            image, os.path.join(noise_dir, f"noise_{i}.png"),
+            normalize=True, nrow=10, padding=16, pad_value=255)
 
-    plt.imshow(noise_grid.permute(1, 2, 0))
-    plt.show()
-    print()
+    # with open(os.path.join(im_dir, f"{args.name}_questions.txt"), 'w') as writer:
+    #     for q in sample_questions:
+    #         writer.write(f"{q[0]} {q[1]} type={q[2]} spec={q[3]}\n")
+    # plt.imshow(noise_grid.permute(1, 2, 0))
+    # plt.show()
+    # print()
     # TODO Add headers and rows manually
 
     # os.makedirs(args.output_dir, exist_ok=True)

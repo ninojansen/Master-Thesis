@@ -29,7 +29,10 @@ class VQA(pl.LightningModule):
         self.lr = cfg.TRAIN.LR
         self.save_hyperparameters(self.cfg)
 
-        self.text_embedding_generator = TextEmbeddingGenerator(ef_type=cfg.MODEL.EF_TYPE, data_dir=cfg.DATA_DIR)
+        try:
+            self.text_embedding_generator = TextEmbeddingGenerator(ef_type=cfg.MODEL.EF_TYPE, data_dir=cfg.DATA_DIR)
+        except:
+            pass
         if cfg.MODEL.CNN_TYPE != "cnn":
             self.embedding_generator = ImageEmbeddingGenerator(cfg.DATA_DIR, cfg.MODEL.CNN_TYPE)
 

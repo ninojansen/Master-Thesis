@@ -42,6 +42,23 @@ def parse_args():
     return args
 
 
+def load_vqa_results_file(path):
+    if os.path.isfile(path):
+        df = pd.read_csv(path)
+    else:
+        df = pd.DataFrame(columns=["Loss", "Gating", "Full", "Yes/No", "Open",
+                                   "Size", "Shape", "Color", "Location", "Count", "Spec1", "Spec2", "Spec3", "Path"])
+    return df
+
+
+def load_ig_results_file(path):
+    if os.path.isfile(path):
+        df = pd.read_csv(path)
+    else:
+        df = pd.DataFrame(columns=["Loss", "Gating", "FID", "Inception", "VQA", "Path"])
+    return df
+
+
 if __name__ == "__main__":
     args = parse_args()
     if args.cfg_file is not None:
@@ -94,11 +111,12 @@ if __name__ == "__main__":
     logger = TensorBoardLogger(
         args.output_dir, name=f"finetune_{args.type}", version=f"cycle_{cfg.TRAIN.LOSS}_{cfg.TRAIN.GATING}_{version}")
     if args.type == "ig":
-        torch.save(cycle_model.ig_model.generator.state_dict(),
-                   f"{args.output_dir}/finetine_ig_{cfg.TRAIN.LOSS}_{version}_model")
+        model_save_path = f"{args.output_dir}/finetine_ig_{cfg.TRAIN.LOSS}_{version}_model"
+        torch.save(cycle_model.ig_model.generator.state_dict(), model_save_path)
     else:
+        model_save_path = f"{args.output_dir}/finetine_vqa_{cfg.TRAIN.LOSS}_{cfg.TRAIN.GATING}_{version}_model"
         torch.save(cycle_model.vqa_model.model.state_dict(),
-                   f"{args.output_dir}/finetine_vqa_{cfg.TRAIN.LOSS}_{cfg.TRAIN.GATING}_{version}_model")
+                   model_save_path)
     trainer = pl.Trainer.from_argparse_args(
         args, max_epochs=cfg.TRAIN.MAX_EPOCH, logger=logger, default_root_dir=args.output_dir)
 
@@ -107,59 +125,69 @@ if __name__ == "__main__":
 
     result = trainer.test(cycle_model)
 
+    os.makedirs(args.output_dir, exist_ok=True)
+
     if args.type == "vqa":
-        df = pd.DataFrame(columns=["Full", "Yes/No", "Open", "Size", "Shape", "Color", "Location",
-                                   "Count", "Spec1", "Spec2", "Spec3", "Path"], index=[f"finetune_vqa_{cfg.TRAIN.LOSS}"])
-        i = 0
-        df["Full"][i] = result[0]["Test/Acc/General"]
-        df["Yes/No"][i] = result[0]["Test/Acc/Bool"]
-        df["Open"][i] = result[0]["Test/Acc/Open"]
-        df["Size"][i] = result[0]["Test/Acc/Size"]
-        df["Shape"][i] = result[0]["Test/Acc/Shape"]
-        df["Color"][i] = result[0]["Test/Acc/Color"]
-        df["Location"][i] = result[0]["Test/Acc/Location"]
-        df["Count"][i] = result[0]["Test/Acc/Count"]
-        df["Spec1"][i] = result[0]["Test/Acc/Spec1"]
-        df["Spec2"][i] = result[0]["Test/Acc/Spec2"]
-        df["Spec3"][i] = result[0]["Test/Acc/Spec3"]
-        df.to_csv(f"{args.output_dir}/finetune_vqa_{cfg.TRAIN.LOSS}_{version}.csv")
+        results_path = os.path.join(args.output_dir, f"finetune_vqa_results.csv")
+        df = load_vqa_results_file(results_path)
+        # df = pd.DataFrame(columns=["Full", "Yes/No", "Open", "Size", "Shape", "Color", "Location",
+        #                            "Count", "Spec1", "Spec2", "Spec3", "Path"], index=[f"finetune_vqa_{cfg.TRAIN.LOSS}"])
+        # i = 0
+        row = {
+            "Loss": cfg.TRAIN.LOSS,
+            "Gating": cfg.TRAIN.GATING,
+            "Full": result[0]["Test/Acc/General"],
+            "Yes/No": result[0]["Test/Acc/Bool"],
+            "Open": result[0]["Test/Acc/Open"],
+            "Size": result[0]["Test/Acc/Size"],
+            "Shape": result[0]["Test/Acc/Shape"],
+            "Color": result[0]["Test/Acc/Color"],
+            "Location": result[0]["Test/Acc/Location"],
+            "Count": result[0]["Test/Acc/Count"],
+            "Spec1": result[0]["Test/Acc/Spec1"],
+            "Spec2": result[0]["Test/Acc/Spec2"],
+            "Spec3": result[0]["Test/Acc/Spec3"],
+            "Path": model_save_path}
+        df.loc[datetime.now().strftime("%d-%m_%H:%M:%S")] = row
+        df.to_csv(results_path, index=False)
     else:
+        results_path = os.path.join(args.output_dir, f"finetune_ig_results.csv")
+        df = load_ig_results_file(results_path)
+        row = {
+            "Loss": cfg.TRAIN.LOSS,
+            "Gating": cfg.TRAIN.GATING,
+            "FID": cycle_model.results["FID"],
+            "Inception": cycle_model.results["IS_MEAN"],
+            "VQA": result[0]["Test/VQA_Acc"],
+            "Path": model_save_path}
 
-        df = pd.DataFrame(
-            columns=["FID", "Inception mean", "Inception std", "VQA", "Path"],
-            index=[f"finetune_ig_{cfg.TRAIN.LOSS}"])
-        row_id = 0
-        df["FID"][row_id] = cycle_model.results["FID"]
-        df["Inception mean"][row_id] = cycle_model.results["IS_MEAN"]
-        df["Inception std"][row_id] = cycle_model.results["IS_STD"]
-        df["VQA"][row_id] = result[0]["Test/VQA_Acc"]
-        df.to_csv(f"{args.output_dir}/finetune_ig_{cfg.TRAIN.LOSS}_{version}.csv")
+        df.loc[datetime.now().strftime("%d-%m_%H:%M:%S")] = row
+        df.to_csv(results_path, index=False)
+        # count_questions = [('How many shapes are in the image?', 'two', 'count', 0),
+        #                    ("How many black objects are in the image?", 'one', 'count', 1)]
+        # color_questions = [('Which color is the small cicrcle?', 'brown', 'color', 2),
+        #                    ("Is there a orange circle present?", 'yes', 'color', 2)]
+        # shape_questions = [("Does the image contain a medium sized indigo circle?", 'yes', 'shape', 3),
+        #                    ("Does the image contain a circle?", 'yes', 'shape', 1)]
 
-        count_questions = [('How many shapes are in the image?', 'two', 'count', 0),
-                           ("How many black objects are in the image?", 'one', 'count', 1)]
-        color_questions = [('Which color is the small cicrcle?', 'brown', 'color', 2),
-                           ("Is there a orange circle present?", 'yes', 'color', 2)]
-        shape_questions = [("Does the image contain a medium sized indigo circle?", 'yes', 'shape', 3),
-                           ("Does the image contain a circle?", 'yes', 'shape', 1)]
+        # size = [("How large is the orange circle?", 'small', 'size', 3),
+        #         ("Does the image contain a large rectangle?", 'yes', 'shape', 1)]
 
-        size = [("How large is the orange circle?", 'small', 'size', 3),
-                ("Does the image contain a large rectangle?", 'yes', 'shape', 1)]
+        # location_questions = [("Is there a red triangle above the circle?", 'yes', 'location', 3),
+        #                       ("In which part is the violet triangle placed?", 'bottom', 'location', 2)]
 
-        location_questions = [("Is there a red triangle above the circle?", 'yes', 'location', 3),
-                              ("In which part is the violet triangle placed?", 'bottom', 'location', 2)]
+        # sample_questions = count_questions + color_questions + shape_questions + size + location_questions
+        # q_embedding = cycle_model.text_embedding_generator.process_batch([x[0] for x in sample_questions])
+        # a_embedding = cycle_model.text_embedding_generator.process_batch([x[1] for x in sample_questions])
+        # qa_embedding = torch.cat((q_embedding, a_embedding), dim=1).cuda()
+        # noise = torch.randn(len(sample_questions), cycle_model.ig_model.cfg.MODEL.Z_DIM).cuda()
+        # fake_pred = cycle_model.ig_model(noise, qa_embedding)
 
-        sample_questions = count_questions + color_questions + shape_questions + size + location_questions
-        q_embedding = cycle_model.text_embedding_generator.process_batch([x[0] for x in sample_questions])
-        a_embedding = cycle_model.text_embedding_generator.process_batch([x[1] for x in sample_questions])
-        qa_embedding = torch.cat((q_embedding, a_embedding), dim=1).cuda()
-        noise = torch.randn(len(sample_questions), cycle_model.ig_model.cfg.MODEL.Z_DIM).cuda()
-        fake_pred = cycle_model.ig_model(noise, qa_embedding)
+        # grid = torchvision.utils.save_image(
+        #     fake_pred, f"{args.output_dir}/finetune_ig_{cfg.TRAIN.LOSS}_{version}_image.png", normalize=True,
+        #     nrow=len(sample_questions),
+        #     padding=16, pad_value=255)
 
-        grid = torchvision.utils.save_image(
-            fake_pred, f"{args.output_dir}/finetune_ig_{cfg.TRAIN.LOSS}_{version}_image.png", normalize=True,
-            nrow=len(sample_questions),
-            padding=16, pad_value=255)
-
-        with open(f"{args.output_dir}/finetune_ig_{cfg.TRAIN.LOSS}_{version}_image.txt", 'w') as writer:
-            writer.write(" || ".join([f"{x[0]} {x[1]} type={x[2]} spec={x[3]}" for x in sample_questions]) + "\n")
-            writer.write(f"finetune_ig_{cfg.TRAIN.LOSS}_{version}\n")
+        # with open(f"{args.output_dir}/finetune_ig_{cfg.TRAIN.LOSS}_{version}_image.txt", 'w') as writer:
+        #     writer.write(" || ".join([f"{x[0]} {x[1]} type={x[2]} spec={x[3]}" for x in sample_questions]) + "\n")
+        #     writer.write(f"finetune_ig_{cfg.TRAIN.LOSS}_{version}\n")
