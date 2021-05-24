@@ -162,6 +162,7 @@ if __name__ == "__main__":
         "Color": result[0]["Test/Acc/Color"],
         "Location": result[0]["Test/Acc/Location"],
         "Count": result[0]["Test/Acc/Count"],
+        "Spec0": result[0]["Test/Acc/Spec0"],
         "Spec1": result[0]["Test/Acc/Spec1"],
         "Spec2": result[0]["Test/Acc/Spec2"],
         "Spec3": result[0]["Test/Acc/Spec3"]}

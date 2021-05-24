@@ -88,6 +88,7 @@ class VQA(pl.LightningModule):
                              "Test/Acc/Count": pl.metrics.Accuracy().cuda(),
                              "Test/Acc/Color": pl.metrics.Accuracy().cuda(),
                              "Test/Acc/Shape": pl.metrics.Accuracy().cuda(),
+                             "Test/Acc/Spec0": pl.metrics.Accuracy().cuda(),
                              "Test/Acc/Spec1": pl.metrics.Accuracy().cuda(),
                              "Test/Acc/Spec2": pl.metrics.Accuracy().cuda(),
                              "Test/Acc/Spec3": pl.metrics.Accuracy().cuda(),
@@ -156,6 +157,8 @@ class VQA(pl.LightningModule):
         count_pred = [index for index, element in enumerate(
             batch["question_json"]['type']) if element == "count"]
 
+        spec0_pred = [index for index, element in enumerate(
+            batch["question_json"]['specificity']) if element == 0]
         spec1_pred = [index for index, element in enumerate(
             batch["question_json"]['specificity']) if element == 1]
         spec2_pred = [index for index, element in enumerate(
@@ -179,6 +182,8 @@ class VQA(pl.LightningModule):
             self.test_metrics["Test/Acc/Count"](F.softmax(y_pred[count_pred], dim=1), batch["target"][count_pred])
         if len(shape_pred) > 0:
             self.test_metrics["Test/Acc/Shape"](F.softmax(y_pred[shape_pred], dim=1), batch["target"][shape_pred])
+        if len(spec0_pred) > 0:
+            self.test_metrics["Test/Acc/Spec0"](F.softmax(y_pred[spec0_pred], dim=1), batch["target"][spec0_pred])
         if len(spec1_pred) > 0:
             self.test_metrics["Test/Acc/Spec1"](F.softmax(y_pred[spec1_pred], dim=1), batch["target"][spec1_pred])
         if len(spec2_pred) > 0:
