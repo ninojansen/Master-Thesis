@@ -46,8 +46,8 @@ def load_vqa_results_file(path):
     if os.path.isfile(path):
         df = pd.read_csv(path)
     else:
-        df = pd.DataFrame(columns=["Loss", "Gating", "Full", "Yes/No", "Open",
-                                   "Size", "Shape", "Color", "Location", "Count", "Spec1", "Spec2", "Spec3", "Path"])
+        df = pd.DataFrame(columns=["Loss", "Gating", "Full", "Yes/No", "Open", "Size", "Shape",
+                                   "Color", "Location", "Count", "Spec0", "Spec1", "Spec2", "Spec3", "Path"])
     return df
 
 
@@ -144,6 +144,7 @@ if __name__ == "__main__":
             "Color": result[0]["Test/Acc/Color"],
             "Location": result[0]["Test/Acc/Location"],
             "Count": result[0]["Test/Acc/Count"],
+            "Spec0": result[0]["Test/Acc/Spec0"],
             "Spec1": result[0]["Test/Acc/Spec1"],
             "Spec2": result[0]["Test/Acc/Spec2"],
             "Spec3": result[0]["Test/Acc/Spec3"],

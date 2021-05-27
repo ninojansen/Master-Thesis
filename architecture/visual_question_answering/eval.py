@@ -25,11 +25,10 @@ from architecture.embeddings.text.generator import TextEmbeddingGenerator
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a DAMSM network')
     parser.add_argument('--ckpt', dest='ckpt', type=str,
-                        default="/home/nino/Documents/Models/VQA/vqa_experiment_final/cnn")
+                        default="/home/nino/Downloads/bottom_attention1")
     parser.add_argument('--data_dir', dest='data_dir', type=str, default="/home/nino/Documents/Datasets/ExtEasyVQA")
     parser.add_argument('--config_name', dest='name', type=str, default="")
     parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
-
     parser = pl.Trainer.add_argparse_args(parser)
     parser.set_defaults(gpus=-1)
     args = parser.parse_args()
@@ -42,7 +41,7 @@ def load_results_file(path):
         df = pd.read_csv(path)
     else:
         df = pd.DataFrame(columns=["Name", "CNN Type", "Text Embedding", "Full", "Yes/No", "Open",
-                                   "Size", "Shape", "Color", "Location", "Count", "Spec1", "Spec2", "Spec3"])
+                                   "Size", "Shape", "Color", "Location", "Count", "Spec0", "Spec1", "Spec2", "Spec3"])
     return df
 
 
@@ -50,7 +49,7 @@ if __name__ == "__main__":
     args = parse_args()
 
     datamodule = EasyVQADataModule(
-        data_dir=args.data_dir, batch_size=24, num_workers=12, im_size=128, pretrained_text=False)
+        data_dir=args.data_dir, batch_size=2, num_workers=4, im_size=128, pretrained_text=False)
     datamodule.setup("test")
 
     model_ckpts = []

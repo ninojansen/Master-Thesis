@@ -16,6 +16,7 @@ from architecture.utils.utils import gen_image_grid, weights_init, generate_figu
 from easydict import EasyDict as edict
 from architecture.embeddings.image.generator import ImageEmbeddingGenerator
 from architecture.embeddings.text.generator import TextEmbeddingGenerator
+from scipy.stats import truncnorm
 
 
 class VAE_DFGAN(pl.LightningModule):
@@ -127,7 +128,7 @@ class DFGAN(pl.LightningModule):
         if pretrained_encoder:
             self.generator = pretrained_encoder
         else:
-            self.generator = NetG(cfg.MODEL.NG, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
+            self.generator = NetG(cfg.MODEL.NG, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, cfg.MODEL.SKIP_Z)
         self.generator.apply(weights_init)
         self.discriminator = NetD(cfg.MODEL.ND, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=True)
 
@@ -160,10 +161,17 @@ class DFGAN(pl.LightningModule):
         self.logger.experiment.add_graph(self.generator, (torch.ones(1, self.cfg.MODEL.Z_DIM).cuda(),
                                                           torch.ones(1, self.cfg.MODEL.EF_DIM).cuda()))
 
+    def truncated_z_sample(self, batch_size, z_dim, truncation=0.5):
+        values = truncnorm.rvs(-2, 2, size=(batch_size, z_dim)).astype(np.float32)
+        return torch.from_numpy(truncation * values).cuda()
+
     def forward(self, x, y=None):
         # in lightning, forward defines the prediction/inference actions
-
-        return self.generator(x, y)
+        if self.cfg.MODEL.SKIP_Z:
+            z = self.truncated_z_sample(self.cfg.TRAIN.BATCH_SIZE, self.cfg.MODEL.Z_DIM)
+        else:
+            z = None
+        return self.generator(x, y, z)
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         noise_decay = 2 ** (-0.5 * self.current_epoch)
