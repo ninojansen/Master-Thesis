@@ -31,7 +31,7 @@ class VAE_DFGAN(pl.LightningModule):
         self.encoder = NetD(cfg.MODEL.ND, cfg.IM_SIZE,
                             cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=False)
         self.encoder.apply(weights_init)
-        self.decoder = NetG(cfg.MODEL.NG, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
+        self.decoder = NetG(cfg.MODEL.NG, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, cfg.MODEL.SKIP_Z)
 
         self.decoder.apply(weights_init)
         self.kl_loss = lambda mu, logvar: -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
@@ -55,7 +55,15 @@ class VAE_DFGAN(pl.LightningModule):
 
     def forward(self, x, y=None):
         # in lightning, forward defines the prediction/inference actions
-        return self.decoder(x, y)
+        if self.cfg.MODEL.SKIP_Z:
+            z = self.truncated_z_sample(x.size(0), x.size(1))
+        else:
+            z = None
+        return self.decoder(x, y, z)
+
+    def truncated_z_sample(self, batch_size, z_dim, truncation=0.5):
+        values = truncnorm.rvs(-2, 2, size=(batch_size, z_dim)).astype(np.float32)
+        return torch.from_numpy(truncation * values).cuda()
 
     def training_step(self, batch, batch_idx):
         self.opt.zero_grad()
@@ -66,7 +74,7 @@ class VAE_DFGAN(pl.LightningModule):
 
         mu, logvar = self.encoder(x, y)
         z = self.reparameterize(mu, logvar)
-        recon_x = self.decoder(z, y)
+        recon_x = self.forward(z, y)
 
         recon_loss = F.mse_loss(
             recon_x.view(-1, self.cfg.IM_SIZE ** 2 * 3),
@@ -168,7 +176,7 @@ class DFGAN(pl.LightningModule):
     def forward(self, x, y=None):
         # in lightning, forward defines the prediction/inference actions
         if self.cfg.MODEL.SKIP_Z:
-            z = self.truncated_z_sample(self.cfg.TRAIN.BATCH_SIZE, self.cfg.MODEL.Z_DIM)
+            z = self.truncated_z_sample(x.size(0), x.size(1))
         else:
             z = None
         return self.generator(x, y, z)
@@ -203,7 +211,7 @@ class DFGAN(pl.LightningModule):
        # d_loss_wrong = F.binary_cross_entropy_with_logits(wrong_pred, fake)
         # Forward pass
         noise = torch.randn(batch_size, 100).type_as(real_img)
-        fake_img = self.generator(noise, text_embed)
+        fake_img = self.forward(noise, text_embed)
         # Prediction on the generated images
         fake_pred = self.discriminator(fake_img.detach() + torch.randn_like(fake_img) * noise_decay, text_embed)
         # fake_pred = self.discriminator(fake_img.detach(), text_embed)
