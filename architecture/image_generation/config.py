@@ -29,7 +29,6 @@ __C.MODEL.Z_DIM = 100
 __C.MODEL.EF_DIM = 10
 __C.MODEL.EF_TYPE = "sbert"
 __C.MODEL.GAN = "DFGAN"
-__C.MODEL.SKIP_Z = False
 __C.TEST = edict()
 __C.TEST.CHECKPOINT = ''
 

@@ -8,17 +8,15 @@ from scipy.stats import truncnorm
 
 
 class NetG(nn.Module):
-    def __init__(self, nf, img_size, z_dim, ef_dim, skip_z=True):
+    def __init__(self, nf, img_size, z_dim, ef_dim):
         super(NetG, self).__init__()
         self.nf = nf
         self.img_size = img_size
-        self.skip_z = skip_z
         self.z_dim = z_dim
         # layer1输入的是一个100x1x1的随机噪声, 输出尺寸(ngf*8)x4x4
 
         self.fc = nn.Linear(z_dim, self.nf * 8 * 4 * 4)
-        if self.skip_z:
-            ef_dim = ef_dim + z_dim
+
         if img_size == 32:
             self.block0 = G_Block(nf * 8, nf * 8, ef_dim)  # 16x16
             self.block1 = G_Block(nf * 8, nf * 4, ef_dim)  # 32x32
@@ -56,15 +54,9 @@ class NetG(nn.Module):
     # def truncate_z(self, z, truncation=0.5, a=-1, b=1):
     #     return torch.clamp(z, a, b) * truncation
 
-    def forward(self, x, c, z=None):
+    def forward(self, x, c):
         # x: noise vector
         # c: sentence vector
-        if self.skip_z:
-           # c = c
-           # For validation check
-            if z is None:
-                z = x
-            c = torch.cat((c, z), dim=1)
         out = self.fc(x)
         out = out.view(x.size(0), 8 * self.nf, 4, 4)
         out = self.block0(out, c)
