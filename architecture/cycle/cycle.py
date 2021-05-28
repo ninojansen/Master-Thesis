@@ -19,6 +19,7 @@ from architecture.image_generation.trainer import DFGAN
 from datetime import datetime
 from architecture.cycle.trainer import FinetuneVQA, FinetuneIG
 import pandas as pd
+from typing import OrderedDict
 
 
 def parse_args():
@@ -30,6 +31,7 @@ def parse_args():
     parser.add_argument('--num_workers', dest='num_workers', type=int, default=None)
     parser.add_argument('--data_dir', dest='data_dir', type=str, default=None)
     parser.add_argument("--vqa_ckpt", dest='vqa_ckpt', type=str, default=None)
+    parser.add_argument("--finetune_ckpt", dest='finetune_ckpt', type=str, default=None)
     parser.add_argument("--gating", dest='gating', action='store_true')
     parser.add_argument("--ig_ckpt", dest='ig_ckpt', type=str, default=None)
     parser.add_argument("--type", dest='type', type=str, default="vqa")
@@ -59,6 +61,16 @@ def load_ig_results_file(path):
     return df
 
 
+def load_finetune_ckpt(path):
+    x = torch.load(path)["state_dict"]
+    ig_keys = [x for x in x.keys() if "ig_model" in x]
+    [x.pop(key) for key in ig_keys]
+    res = OrderedDict()
+    for key, value in x.items():
+        res[key.replace("vqa_model.model.", "")] = value
+    return res
+
+
 if __name__ == "__main__":
     args = parse_args()
     if args.cfg_file is not None:
@@ -81,6 +93,9 @@ if __name__ == "__main__":
 
     vqa_model = VQA.load_from_checkpoint(cfg.MODEL.VQA_CHECKPOINT)
     ig_model = DFGAN.load_from_checkpoint(cfg.MODEL.IG_CHECKPOINT)
+
+    if args.finetune_ckpt:
+        vqa_model.model.load_from_checkpoint(load_finetune_ckpt(args.finetune_ckpt))
 
     if vqa_model.cfg.MODEL.EF_TYPE != ig_model.cfg.MODEL.EF_TYPE:
         raise NameError(
@@ -152,7 +167,8 @@ if __name__ == "__main__":
         df.loc[datetime.now().strftime("%d-%m_%H:%M:%S")] = row
         df.to_csv(results_path, index=False)
     else:
-        results_path = os.path.join(args.output_dir, f"finetune_ig_results.csv")
+        ft_str = "ftvqa" if args.finetune_ckpt else ""
+        results_path = os.path.join(args.output_dir, f"finetune_ig_{ft_str}_results.csv")
         df = load_ig_results_file(results_path)
         row = {
             "Loss": cfg.TRAIN.LOSS,
