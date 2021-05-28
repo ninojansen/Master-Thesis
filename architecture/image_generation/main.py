@@ -34,7 +34,6 @@ def parse_args():
     parser.add_argument('--data_dir', dest='data_dir', type=str, default=None)
     parser.add_argument('--type', dest='type', type=str, default="no_pretrain")
     parser.add_argument('--test', dest='test', action="store_true", default=False)
-    parser.add_argument('--skip_z', dest='skip_z', action="store_true", default=False)
     parser.add_argument("--iterator", dest='iterator', type=str, default="image")
     parser.add_argument("--vqa_ckpt", dest='vqa_ckpt', type=str, default=None)
     parser = pl.Trainer.add_argparse_args(parser)
@@ -59,7 +58,6 @@ if __name__ == "__main__":
     if args.ef_type:
         cfg.MODEL.EF_TYPE = args.ef_type
 
-    cfg.MODEL.SKIP_Z = args.skip_z
     if args.data_dir:
         cfg.DATA_DIR = args.data_dir
     if args.vqa_ckpt:

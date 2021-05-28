@@ -31,7 +31,7 @@ class VAE_DFGAN(pl.LightningModule):
         self.encoder = NetD(cfg.MODEL.ND, cfg.IM_SIZE,
                             cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=False)
         self.encoder.apply(weights_init)
-        self.decoder = NetG(cfg.MODEL.NG, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, cfg.MODEL.SKIP_Z)
+        self.decoder = NetG(cfg.MODEL.NG, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
 
         self.decoder.apply(weights_init)
         self.kl_loss = lambda mu, logvar: -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
@@ -55,11 +55,7 @@ class VAE_DFGAN(pl.LightningModule):
 
     def forward(self, x, y=None):
         # in lightning, forward defines the prediction/inference actions
-        if self.cfg.MODEL.SKIP_Z:
-            z = self.truncated_z_sample(x.size(0), x.size(1))
-        else:
-            z = None
-        return self.decoder(x, y, z)
+        return self.decoder(x, y)
 
     def truncated_z_sample(self, batch_size, z_dim, truncation=0.5):
         values = truncnorm.rvs(-2, 2, size=(batch_size, z_dim)).astype(np.float32)
@@ -136,7 +132,7 @@ class DFGAN(pl.LightningModule):
         if pretrained_encoder:
             self.generator = pretrained_encoder
         else:
-            self.generator = NetG(cfg.MODEL.NG, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, cfg.MODEL.SKIP_Z)
+            self.generator = NetG(cfg.MODEL.NG, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM)
         self.generator.apply(weights_init)
         self.discriminator = NetD(cfg.MODEL.ND, cfg.IM_SIZE, cfg.MODEL.Z_DIM, cfg.MODEL.EF_DIM, disc=True)
 
@@ -175,11 +171,7 @@ class DFGAN(pl.LightningModule):
 
     def forward(self, x, y=None):
         # in lightning, forward defines the prediction/inference actions
-        if self.cfg.MODEL.SKIP_Z:
-            z = self.truncated_z_sample(x.size(0), x.size(1))
-        else:
-            z = None
-        return self.generator(x, y, z)
+        return self.generator(x, y)
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         noise_decay = 2 ** (-0.5 * self.current_epoch)
