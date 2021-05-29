@@ -71,6 +71,15 @@ def load_finetune_ckpt(path):
     return res
 
 
+def load_ig_finetune_ckpt(path):
+    x = torch.load(path)["state_dict"]
+    res = OrderedDict()
+    for key, value in x.items():
+        if "ig_model.generator." in key:
+            res[key.replace("ig_model.generator.", "")] = value
+    return res
+
+
 if __name__ == "__main__":
     args = parse_args()
     if args.cfg_file is not None:
@@ -95,7 +104,10 @@ if __name__ == "__main__":
     ig_model = DFGAN.load_from_checkpoint(cfg.MODEL.IG_CHECKPOINT)
 
     if args.finetune_ckpt:
-        vqa_model.model.load_from_checkpoint(load_finetune_ckpt(args.finetune_ckpt))
+        if args.type == "vqa":
+            vqa_model.model.load_state_dict(load_finetune_ckpt(args.finetune_ckpt))
+        elif args.type == "ig":
+            ig_model.model.load_state_dict(load_ig_finetune_ckpt(args.finetune_ckpt))
 
     if vqa_model.cfg.MODEL.EF_TYPE != ig_model.cfg.MODEL.EF_TYPE:
         raise NameError(
@@ -143,7 +155,8 @@ if __name__ == "__main__":
     os.makedirs(args.output_dir, exist_ok=True)
 
     if args.type == "vqa":
-        results_path = os.path.join(args.output_dir, f"finetune_vqa_results.csv")
+        ft_str = "ftvqa" if args.finetune_ckpt else ""
+        results_path = os.path.join(args.output_dir, f"finetune_vqa_{ft_str}_results.csv")
         df = load_vqa_results_file(results_path)
         # df = pd.DataFrame(columns=["Full", "Yes/No", "Open", "Size", "Shape", "Color", "Location",
         #                            "Count", "Spec1", "Spec2", "Spec3", "Path"], index=[f"finetune_vqa_{cfg.TRAIN.LOSS}"])
