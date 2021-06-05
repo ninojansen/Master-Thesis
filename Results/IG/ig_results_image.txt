@@ -1,6 +1,0 @@
-How many shapes are in the image? two_type=countspec=0 How many black objects are in the image? one_type=countspec=1 Which color is the small cicrcle? brown_type=colorspec=2 Is there a orange circle present? yes_type=colorspec=2 Does the image contain a medium sized indigo circle? yes_type=shapespec=3 Does the image contain a circle? yes_type=shapespec=1 How large is the orange circle? small_type=sizespec=3 Does the image contain a large rectangle? yes_type=shapespec=1 Is there a red triangle above the circle? yes_type=locationspec=3 In which part is the violet triangle placed? bottom_type=locationspec=2
-phoc_reduced non_pretrained_05-05_13:00:37
-sbert_reduced non_pretrained_05-05_11:04:49
-phoc_full non_pretrained_05-05_11:19:44
-bow non_pretrained_05-05_13:02:09
-sbert_full non_pretrained_05-05_11:17:48

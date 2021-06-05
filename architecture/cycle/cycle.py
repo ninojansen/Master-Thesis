@@ -104,6 +104,9 @@ if __name__ == "__main__":
     ig_model = DFGAN.load_from_checkpoint(cfg.MODEL.IG_CHECKPOINT)
 
     if args.finetune_ckpt:
+        if len(args.finetune_ckpt < 4):
+            args.finetune_ckpt = None
+    if args.finetune_ckpt:
         if args.type == "vqa":
             vqa_model.model.load_state_dict(load_finetune_ckpt(args.finetune_ckpt))
         elif args.type == "ig":

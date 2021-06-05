@@ -58,7 +58,7 @@ class DataGenerator:
         self.num2words_dict = {0: "zero", 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five',
                                6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten'}
     #    self.create_img(os.path.join(self.data_dir, "diag"), None)
-        self.generate()
+       # self.generate()
 
     def init_folders(self):
         for root, dirs, files in os.walk(self.data_dir):
@@ -1040,3 +1040,16 @@ if __name__ == "__main__":
    # data_dir = "/data/s2965690/datasets/ExtEasyVQA/"
     data_dir = "/home/nino/Documents/Datasets/TestExtEasyVQA/"
     generator = DataGenerator(data_dir, 128, 15000)
+    generator.generate()
+    print()
+    # attr(0)=Shape attr(1)=Color attr(2)=Size attr(3)=Location
+
+    shape = Shape.CIRCLE
+    size = Size.MEDIUM
+    location = Location.CENTRE
+
+    # for color in Color:
+    #     print(generator._name(color))
+    #     attr_list = [(shape, color, size, location)]
+    #     im = generator.create_img(attr_list)
+    #     im.save(f"{generator._name(color)}.png")

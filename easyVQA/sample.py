@@ -13,6 +13,7 @@ n_samples = 20
 
 samples = random.sample(os.listdir(im_path), n_samples)
 
+q = []
 with open(q_path, 'r') as file:
     questions = json.load(file)
     for img in samples:

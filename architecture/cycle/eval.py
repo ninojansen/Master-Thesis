@@ -27,13 +27,13 @@ from architecture.embeddings.text.generator import TextEmbeddingGenerator
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a DAMSM network')
     parser.add_argument('--ckpt', dest='ckpt', type=str,
-                        default="/home/nino/Downloads/vqa_cycle_final3/finetune_vqa")
+                        default="/home/nino/Downloads/vqa_cycle_ftig_final1/finetune_vqa")
     parser.add_argument(
         '--vqa_ckpt', dest='vqa_ckpt', type=str,
-        default="/home/nino/Downloads/vqa_cycle_final3/ef=sbert_reduced_nhidden=256_lr=0.002/checkpoints/epoch=10-step=41249.ckpt")
+        default="/home/nino/Downloads/vqa_cycle_final1/ef=sbert_reduced_nhidden=256_lr=0.002/checkpoints/epoch=8-step=33749.ckpt")
     parser.add_argument('--data_dir', dest='data_dir', type=str, default="/home/nino/Documents/Datasets/ExtEasyVQA")
-    parser.add_argument('--name', dest='name', type=str, default="cycle3")
-    parser.add_argument('--outdir', dest='output_dir', type=str, default='./output')
+    parser.add_argument('--name', dest='name', type=str, default="cycle1")
+    parser.add_argument('--outdir', dest='output_dir', type=str, default='./output/vqa_cycle_ftig/')
 
     parser = pl.Trainer.add_argparse_args(parser)
     parser.set_defaults(gpus=-1)
