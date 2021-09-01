@@ -99,10 +99,10 @@ if __name__ == "__main__":
 
     experiment_ids = {
         "BOW": ["CdzRbcyjQoG0wginYoLPrw", "L3BKG5xuRbO2cxDWE9jXaQ", "iAjOHwK1T0OuAR8VZ8gvNA"],
-        "SBERT Full": ["6v2bS0hBQlOd1b5bY2pkCw", "jUpQdNJQQgGYA2WDmbZrNg", "zjhnYymeQdW2up1XWYzMUA"],
-        "SBERT Reduced": ["AT7vpap7Qnmtr7IW91ASZg", "0FXnCOZzS7mwP09PZA6PyA", "xEGnHR91RXa4rlKIVxNvxQ"],
-        "PHOC Full": ["7AmLWROCQEqWEAmSYuVdtw", "BnXc0qqBR3moO50t9BUnTQ", "lTWszxUaT7K75I77VvCYcw"],
-        "PHOC Reduced": ["4xvPDYP7Sba61U1lvlsmrg", "zdpOuZbNTAKKYAiN6N7OvA", "0aT3qJ8MR2yPnWyDfwcK1Q"]}
+        # "SBERT-Full": ["6v2bS0hBQlOd1b5bY2pkCw", "jUpQdNJQQgGYA2WDmbZrNg", "zjhnYymeQdW2up1XWYzMUA"],
+        "SBERT-Reduced": ["AT7vpap7Qnmtr7IW91ASZg", "0FXnCOZzS7mwP09PZA6PyA", "xEGnHR91RXa4rlKIVxNvxQ"],
+        "PHOC-Full": ["7AmLWROCQEqWEAmSYuVdtw", "BnXc0qqBR3moO50t9BUnTQ", "lTWszxUaT7K75I77VvCYcw"],
+        "PHOC-Reduced": ["4xvPDYP7Sba61U1lvlsmrg", "zdpOuZbNTAKKYAiN6N7OvA", "0aT3qJ8MR2yPnWyDfwcK1Q"]}
 
     metrics_ig = ['Acc/Fake', 'Acc/Real', 'FID/Val', 'Inception/Val_Mean',
                   'Loss/Discriminator', 'Loss/Generator']
@@ -125,6 +125,7 @@ if __name__ == "__main__":
     sns.set_context("paper")
     for key, values in tqdm(experiment_ids.items()):
         for value in values:
+
             if skip_full and "full" in key.lower():
                 continue
             experiment = tb.data.experimental.ExperimentFromDev(value)
@@ -156,45 +157,49 @@ if __name__ == "__main__":
     hue = "text embedding"
     err_style = "band"
 
+    for metric in metrics_ig:
+        if "Acc" in metric:
+            non_pretrained_df[metric] = non_pretrained_df[metric] * 100
+            pretrained_df[metric] = pretrained_df[metric] * 100
     # Fake accuracy plots
     plt.figure(figsize=(5, 4), dpi=300)
-    plt.ylim(0, 1)
+    plt.ylim(0, 100)
     sns.lineplot(data=non_pretrained_df, x="step", y="Acc/Fake", hue=hue, ci="sd",
                  err_style=err_style, linewidth=1).set_title(f"Fake Accuracy")
     plt.xlabel("Epoch")
 
-    plt.ylabel("Accuracy")
+    plt.ylabel("Accuracy %")
     plt.savefig(f"{non_pretrained_dir}/fake_accuracy.png", bbox_inches="tight")
     plt.clf()
 
     plt.figure(figsize=(5, 4), dpi=300)
-    plt.ylim(0, 1)
+    plt.ylim(0, 100)
     sns.lineplot(data=pretrained_df, x="step", y="Acc/Fake", hue=hue, ci="sd",
                  err_style=err_style, linewidth=1).set_title(f"Fake Accuracy")
     plt.xlabel("Epoch")
 
-    plt.ylabel("Accuracy")
+    plt.ylabel("Accuracy %")
     plt.savefig(f"{pretrained_dir}/fake_accuracy.png", bbox_inches="tight")
     plt.clf()
 
     # Real accuracy plots
     plt.figure(figsize=(5, 4), dpi=300)
-    plt.ylim(0, 1)
+    plt.ylim(0, 100)
     sns.lineplot(data=non_pretrained_df, x="step", y="Acc/Real", hue=hue, ci="sd",
                  err_style=err_style, linewidth=1).set_title(f"Real Accuracy")
     plt.xlabel("Epoch")
 
-    plt.ylabel("Accuracy")
+    plt.ylabel("Accuracy %")
     plt.savefig(f"{non_pretrained_dir}/real_accuracy.png", bbox_inches="tight")
     plt.clf()
 
     plt.figure(figsize=(5, 4), dpi=300)
-    plt.ylim(0, 1)
+    plt.ylim(0, 100)
     sns.lineplot(data=pretrained_df, x="step", y="Acc/Real", hue=hue, ci="sd",
                  err_style=err_style, linewidth=1).set_title(f"Real Accuracy")
     plt.xlabel("Epoch")
 
-    plt.ylabel("Accuracy")
+    plt.ylabel("Accuracy %")
     plt.savefig(f"{pretrained_dir}/real_accuracy.png", bbox_inches="tight")
     plt.clf()
 

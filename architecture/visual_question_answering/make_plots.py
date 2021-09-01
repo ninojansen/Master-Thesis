@@ -16,6 +16,7 @@ import matplotlib.ticker as ticker
 from tqdm import tqdm
 import gc
 import math
+from matplotlib import ticker
 
 
 def parse_args():
@@ -27,6 +28,20 @@ def parse_args():
                         default='/home/nino/Dropbox/Documents/Master/Thesis/Results/vqa/plots')
     args = parser.parse_args()
     return args
+
+
+def rename(text_embed):
+    if text_embed == "bow":
+        return "BOW"
+    if text_embed == "phoc_full":
+        return "PHOC-Full"
+    if text_embed == "phoc_reduced":
+        return "PHOC-Reduced"
+    if text_embed == "sbert_full":
+        return "SBERT-Full"
+    if text_embed == "sbert_reduced":
+        return "SBERT-Reduced"
+    return text_embed
 
 
 def load_df(experiment_id, key):
@@ -55,7 +70,7 @@ def load_df(experiment_id, key):
         hue = "network"
     else:
         df.rename(columns={"run": "text embedding"}, inplace=True)
-        df["text embedding"] = df["text embedding"].apply(lambda x: x[3:x.index("nhidden") - 1])
+        df["text embedding"] = df["text embedding"].apply(lambda x: rename(x[3:x.index("nhidden") - 1]))
         hue = "text embedding"
     return df, hue
 
@@ -69,10 +84,10 @@ if __name__ == "__main__":
     #     "Language only": "u8PbrL4rT6SrtwPerQb8fA", "Vision only": "SO2pr03FRb65auQn5wNhPw"}
 
     experiment_ids = {
-        "Top Attention": ["ocD15BvnQX259LB3wGxTlQ", "JTEKPNtMRhqzQCXJdlKu3g", "8nRXgNe0RNeBzM8ToQDupg"],
-        "Bottom + Top Attention": ["6c95LLqrTnqyoWg369cN0g", "We8MmrAhRAmyBdwZB9b3Cg", "r1zGgDJjRnK0mtWtvckAsA"],
-        "CNN": ["PyimvbORRVWdXnF44qIzBg", "KuD3ywaYTdaYaVYw16kDGQ", "7gaANjjYTZ2QkJrX2MWsdw"],
-        "Pretrained": ["YMn2tgx1RvOzelcNT4wqRQ", "V08s1OQOQTaVUpecrPLksA", "rWNw72FPSaqCoiwl0ydjnw"],
+        "Top-Attention": ["ocD15BvnQX259LB3wGxTlQ", "JTEKPNtMRhqzQCXJdlKu3g", "8nRXgNe0RNeBzM8ToQDupg"],
+        "Bottom + Top-Attention": ["6c95LLqrTnqyoWg369cN0g", "We8MmrAhRAmyBdwZB9b3Cg", "r1zGgDJjRnK0mtWtvckAsA"],
+        "VQA-CNN": ["PyimvbORRVWdXnF44qIzBg", "KuD3ywaYTdaYaVYw16kDGQ", "7gaANjjYTZ2QkJrX2MWsdw"],
+        "VQA-Pretrained": ["YMn2tgx1RvOzelcNT4wqRQ", "V08s1OQOQTaVUpecrPLksA", "rWNw72FPSaqCoiwl0ydjnw"],
         "Language only": ["NljrGxTlSNKHPejG6Jkh0w", "TvgMDY1oQoeBlYMkpzmLrA", "9Cg1i9CaSMerI42pWeuLCw"],
         "Vision only": ["y10yBlI3QZe7ulMcAqbztg", "qp8Di3PJQB60weeOPDVjVg", "2RGcQAenTliw6mL7cqwN0A"]}
 
@@ -97,7 +112,8 @@ if __name__ == "__main__":
             dfs.append(df)
 
         df_total = pd.concat(dfs)
-
+        df_total["Acc/Train"] = df_total["Acc/Train"] * 100
+        df_total["Acc/Val"] = df_total["Acc/Val"] * 100
         # if key == "Vision only":
         #     df.rename(columns={"run": "Network"}, inplace=True)
         #     optimizer_validation = df["Network"]
@@ -108,24 +124,34 @@ if __name__ == "__main__":
         plt.figure(figsize=(16, 4), dpi=300)
         plt.suptitle(key)
         ax = plt.subplot(1, 3, 1)
-        plt.ylim(0, 1)
+        ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins="auto", integer=True, steps=[2, 4]))
+       # plt.ylim(0, 100)
+       # plt.yticks(np.arange(0, 100, step=10))
         sns.lineplot(data=df_total, x="step", y="Acc/Train", hue=hue, ci="sd", linewidth=1,
                      err_style=err_style).set_title(f"Training accuracy")
         plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
+        plt.ylabel("Accuracy %")
+#        locs, labels = plt.xticks()
+       # if 0 not in locs:
+        # xticks = [0] + list(locs)
+        # plt.xticks(xticks)
+
        # plt.savefig(f"{acc_dir}/{key}_train.png")
       #  plt.clf()
 
         ax = plt.subplot(1, 3, 2)
-        plt.ylim(0, 1)
+        ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins="auto", integer=True, steps=[2, 4]))
+     #   plt.ylim(0, 100)
+       # plt.yticks(np.arange(0, 100, step=10))
         sns.lineplot(data=df_total, x="step", y="Acc/Val", hue=hue, ci="sd", linewidth=1,
                      err_style=err_style).set_title(f"Validation accuracy")
         plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
+        plt.ylabel("Accuracy %")
       #  plt.savefig(f"{acc_dir}/{key}_val.png")
      #   plt.clf()
 
         ax = plt.subplot(1, 3, 3)
+     #   ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         #plt.ylim(0, 1)
         sns.lineplot(data=df_total, x="step", y="Loss/CrossEntropy_epoch", hue=hue, ci="sd", linewidth=1,
                      err_style=err_style).set_title(f"Loss")

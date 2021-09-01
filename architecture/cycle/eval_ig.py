@@ -28,7 +28,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a DAMSM network')
     parser.add_argument(
         '--ckpt', dest='ckpt', type=str,
-        default="/home/nino/Downloads/ig_cycle_wftvqa_final1/finetune_ig/cycle_full_False_28-05_22:58:11/checkpoints/epoch=99-step=37499.ckpt")
+        default="/home/nino/Downloads/ig_ftvqa_cycle_final2/finetune_ig/cycle_full_False_08-06_02:18:33/checkpoints/epoch=99-step=37499.ckpt")
     parser.add_argument(
         '--ig_ckpt', dest='ig_ckpt', type=str,
         default="/home/nino/Documents/Models/IG_FINAL/sbert_reduced3/pretrained_21-05_20:36:25/checkpoints/epoch=399-step=149999.ckpt")

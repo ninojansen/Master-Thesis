@@ -1,4 +1,7 @@
 import math
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 def sigmoid(x):
@@ -71,17 +74,22 @@ def der_leaky_relu(x, c=0.1):
     return a
 
 
-import matplotlib.pyplot as plt
-import numpy as np
-
+sns.set_theme()
+sns.set_context("paper")
 x = np.arange(-10., 10., 0.1)
-fig, ax = plt.subplots(2, 4)
-plt.suptitle("Activation functions")
-ax[0][0].plot(x, create_sigmoid(x))
 
+fig, ax = plt.subplots(2, 4)
+# fig.set_dpi(150)
+plt.suptitle("Activation functions")
+
+#sns.lineplot(x, create_sigmoid(x), ci="None", ax=ax[0][0])
+ax[0][0].plot(x, create_sigmoid(x))
+plt.ylabel("y")
+plt.xlabel("x")
 ax[0][0].set_title("Sigmoid")
 
 ax[0][1].plot(x, der_sigmoid(x))
+
 ax[0][1].set_title("Sigmoid derivative")
 
 ax[0][2].plot(x, relu(x))
@@ -98,4 +106,6 @@ ax[1][2].set_title("LeakyReLU")
 ax[1][3].plot(x, der_leaky_relu(x))
 ax[1][3].set_title("LeakyReLU derivative")
 
+plt.setp(ax[-1, :], xlabel='x')
+plt.setp(ax[:, 0], ylabel='activation')
 plt.show()

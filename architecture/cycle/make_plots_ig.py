@@ -83,7 +83,7 @@ if __name__ == "__main__":
 
     experiment_ids = {"Cycle 1": [
         "IxjQqaoFRS636nqOfo85FA", "MzMW1P4JSk6ioGuKM1A3FQ", "U8ADI1WrSrOCp50Iregyjw"], "Cycle 2": [
-        "JKzbjYtxTPWHxVo2XzpmZQ", "s9LKN53aRD2rrGpNpVDkcA", "r7CMWmWzR5KDins5u1V8Hw"]}
+        "lYMzSO0HRHqoAO81SQXxRg", "MtPQw45ARmevhJbyUeu1Qw", "PnQAgxY8QGO40C865XV3Kw"]}
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -116,22 +116,26 @@ if __name__ == "__main__":
     cycle2_df_step = pd.concat(cycle2_df_step)
     cycle2_df_epoch = pd.concat(cycle2_df_epoch)
 
+    cycle1_df_step["Acc/Train_VQA"] = cycle1_df_step["Acc/Train_VQA"] * 100
+    cycle2_df_step["Acc/Train_VQA"] = cycle2_df_step["Acc/Train_VQA"] * 100
+    cycle1_df_epoch["Acc/Val_VQA"] = cycle1_df_epoch["Acc/Val_VQA"] * 100
+    cycle2_df_epoch["Acc/Val_VQA"] = cycle2_df_epoch["Acc/Val_VQA"] * 100
     # Train vqa accuracy
     plt.figure(figsize=(8, 4))
     plt.suptitle("Train VQA accuracy")
     ax = plt.subplot(1, 2, 1)
-    plt.ylim(0, 1)
+  #  plt.ylim(0, 100)
     sns.lineplot(data=cycle1_df_step, x="step", y="Acc/Train_VQA", ci="sd", hue=hue, linewidth=1,
                  err_style=err_style).set_title(f"Cycle 1")
     plt.xlabel("Epoch")
-    plt.ylabel("Accuracy")
+    plt.ylabel("Accuracy %")
 
     ax = plt.subplot(1, 2, 2)
-    plt.ylim(0, 1)
+  #  plt.ylim(0, 100)
     sns.lineplot(data=cycle2_df_step, x="step", y="Acc/Train_VQA", ci="sd", hue=hue, linewidth=1,
                  err_style=err_style).set_title(f"Cycle 2")
     plt.xlabel("Epoch")
-    plt.ylabel("Accuracy")
+    plt.ylabel("Accuracy %")
 
     plt.savefig(f"{args.output_dir}/train_vqa_acc.png", bbox_inches="tight")
     plt.clf()
@@ -141,18 +145,18 @@ if __name__ == "__main__":
     plt.figure(figsize=(8, 4))
     plt.suptitle("Val VQA accuracy")
     ax = plt.subplot(1, 2, 1)
-    plt.ylim(0, 1)
+   # plt.ylim(0, 100)
     sns.lineplot(data=cycle1_df_epoch, x="step", y="Acc/Val_VQA", ci="sd", hue=hue, linewidth=1,
                  err_style=err_style).set_title(f"Cycle 1")
     plt.xlabel("Epoch")
-    plt.ylabel("Accuracy")
+    plt.ylabel("Accuracy %")
 
     ax = plt.subplot(1, 2, 2)
-    plt.ylim(0, 1)
+   # plt.ylim(0, 100)
     sns.lineplot(data=cycle2_df_epoch, x="step", y="Acc/Val_VQA", ci="sd", hue=hue, linewidth=1,
                  err_style=err_style).set_title(f"Cycle 2")
     plt.xlabel("Epoch")
-    plt.ylabel("Accuracy")
+    plt.ylabel("Accuracy %")
 
     plt.savefig(f"{args.output_dir}/val_vqa_acc.png", bbox_inches="tight")
     plt.clf()

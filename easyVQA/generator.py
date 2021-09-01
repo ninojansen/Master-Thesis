@@ -193,8 +193,8 @@ class DataGenerator:
                     count += 1
                     all_attr.append(extra_attr)
 
-            img = self.create_img(all_attr)
-            img.save(os.path.join(self.data_dir, split, "images", f'{split}_{i}.png'), 'png')
+           # img = self.create_img(all_attr)
+           # img.save(os.path.join(self.data_dir, split, "images", f'{split}_{i}.png'), 'png')
             new_questions = self.create_questions(all_attr, i)
             for question in new_questions:
                 question["id"] = question_id
@@ -1039,7 +1039,7 @@ class DataGenerator:
 if __name__ == "__main__":
    # data_dir = "/data/s2965690/datasets/ExtEasyVQA/"
     data_dir = "/home/nino/Documents/Datasets/TestExtEasyVQA/"
-    generator = DataGenerator(data_dir, 128, 15000)
+    generator = DataGenerator(data_dir, 128, 300000)
     generator.generate()
     print()
     # attr(0)=Shape attr(1)=Color attr(2)=Size attr(3)=Location
